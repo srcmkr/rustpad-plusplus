@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=rustpad++
+GenericName=Text Editor
+GenericName[de]=Texteditor
+Comment=Fast text editor for files of any size - text, hex, JSON, Markdown
+Comment[de]=Schneller Texteditor für Dateien jeder Größe - Text, Hex, JSON, Markdown
+Exec=rustpad %F
+Icon=rustpad
+Terminal=false
+Categories=Utility;TextEditor;
+StartupWMClass=rustpad
+Keywords=editor;text;hex;json;markdown;

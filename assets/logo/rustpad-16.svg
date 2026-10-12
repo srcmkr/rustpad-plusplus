@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" shape-rendering="crispEdges">
+  <title>rustpad++</title>
+  <rect width="16" height="16" rx="3" fill="#D9531E" shape-rendering="geometricPrecision"/>
+  <path d="M2 1 H11 L15 5 V15 H2 Z" fill="#FFFFFF"/>
+  <path d="M11 1 L15 5 H11 Z" fill="#F4B898"/>
+  <rect x="4" y="4" width="5" height="1" fill="#2B2D30"/>
+  <g fill="#C8430F">
+    <rect x="3" y="9" width="5" height="1"/><rect x="5" y="7" width="1" height="5"/>
+    <rect x="9" y="9" width="5" height="1"/><rect x="11" y="7" width="1" height="5"/>
+  </g>
+</svg>

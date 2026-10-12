@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Lets rustpad++ install its updates. The action runs the installed program
+     with one fixed argument; an administrator password is asked for every
+     time (kept for a few minutes). -->
+<policyconfig>
+  <vendor>rustpad++</vendor>
+  <vendor_url>https://github.com/srcmkr/rustpad-plusplus</vendor_url>
+  <icon_name>rustpad</icon_name>
+
+  <action id="io.github.srcmkr.rustpad.update">
+    <description>Update rustpad++ to the latest release</description>
+    <description xml:lang="de">rustpad++ auf die neueste Version aktualisieren</description>
+    <message>rustpad++ wants to install its latest version.</message>
+    <message xml:lang="de">rustpad++ möchte die neueste Version installieren.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@APP@</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">--update</annotate>
+  </action>
+</policyconfig>
