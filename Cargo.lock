@@ -4575,7 +4575,7 @@ dependencies = [
 
 [[package]]
 name = "rustpad"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -4593,7 +4593,7 @@ dependencies = [
 
 [[package]]
 name = "rustpad-update"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "flate2",
  "minisign",

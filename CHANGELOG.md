@@ -2,7 +2,7 @@
 
 What changed in each version of rustpad++. The newest version is at the top.
 
-## Unreleased
+## 0.2.0 - 2026-10-17
 
 - Markdown files open in the rendered view; Ctrl+1 shows the source. New,
   empty Markdown files still open as text.
