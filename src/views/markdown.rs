@@ -11,7 +11,7 @@ use std::time::Duration;
 use gpui::{
     AnyElement, App, Context, Entity, EventEmitter, FocusHandle, Focusable, Font, FontFallbacks,
     FontStyle, FontWeight, Hsla, InteractiveText, IntoElement, ListAlignment, ListOffset, ListState,
-    MouseButton, Render, StrikethroughStyle, StyledText, Task, TextRun, UnderlineStyle, WeakEntity,
+    MouseButton, Pixels, Render, StrikethroughStyle, StyledText, Task, TextRun, UnderlineStyle, WeakEntity,
     Window, div, list, prelude::*, px,
 };
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
@@ -411,6 +411,8 @@ pub struct MarkdownView {
     parsed_version: Option<u64>,
     truncated: bool,
     parsing: bool,
+    /// Font size the list items were measured with; zooming remeasures them.
+    font_size: Pixels,
     _reparse: Option<Task<()>>,
 }
 
@@ -433,6 +435,7 @@ impl MarkdownView {
             parsed_version: None,
             truncated: false,
             parsing: false,
+            font_size: Settings::get(cx).font_size,
             _reparse: None,
         };
         v.reparse(cx);
@@ -486,6 +489,14 @@ impl MarkdownView {
         self.list.reset(n);
         self.list.scroll_to(ListOffset { item_ix: top.item_ix.min(n - 1), offset_in_item: top.offset_in_item });
         cx.notify();
+    }
+
+    /// Drop the cached item heights after zooming by `ratio`, keeping the scroll position.
+    fn remeasure(&mut self, ratio: f32) {
+        let top = self.list.logical_scroll_top();
+        let n = self.list.item_count();
+        self.list.reset(n);
+        self.list.scroll_to(ListOffset { item_ix: top.item_ix.min(n.saturating_sub(1)), offset_in_item: top.offset_in_item * ratio });
     }
 
     fn page(&self, window: &Window) -> gpui::Pixels {
@@ -556,7 +567,8 @@ fn inline_element(id: (&'static str, usize), inline: &Inline, mono: &Font, base:
         .into_any_element()
 }
 
-fn render_block(ix: usize, block: &Block, mono: &Font, view: WeakEntity<MarkdownView>) -> AnyElement {
+/// `z` scales all sizes with the editor zoom (1.0 at the default font size).
+fn render_block(ix: usize, block: &Block, mono: &Font, z: f32, view: WeakEntity<MarkdownView>) -> AnyElement {
     let offset = block.offset as u64;
     let content: AnyElement = match &block.kind {
         BlockKind::Heading(level, inline) => {
@@ -568,10 +580,10 @@ fn render_block(ix: usize, block: &Block, mono: &Font, view: WeakEntity<Markdown
                 _ => (15., theme::text_dim()),
             };
             div()
-                .text_size(px(size))
-                .line_height(px(size * 1.3))
-                .pt(px(if *level <= 2 { 14. } else { 8. }))
-                .pb(px(if *level <= 2 { 6. } else { 2. }))
+                .text_size(px(size * z))
+                .line_height(px(size * 1.3 * z))
+                .pt(px(if *level <= 2 { 14. } else { 8. } * z))
+                .pb(px(if *level <= 2 { 6. } else { 2. } * z))
                 .when(*level <= 2, |d| d.border_b_1().border_color(theme::border()))
                 .child(inline_element(("md-h", ix), inline, mono, color, true))
                 .into_any_element()
@@ -587,11 +599,11 @@ fn render_block(ix: usize, block: &Block, mono: &Font, view: WeakEntity<Markdown
             .px_3()
             .py_2()
             .font(mono.clone())
-            .text_size(px(13.))
-            .line_height(px(19.))
+            .text_size(px(13. * z))
+            .line_height(px(19. * z))
             .text_color(theme::text())
             .when(!lang.is_empty(), |d| {
-                d.child(div().text_size(px(11.)).text_color(theme::text_faint()).child(lang.clone()))
+                d.child(div().text_size(px(11. * z)).text_color(theme::text_faint()).child(lang.clone()))
             })
             .child(text.clone())
             .into_any_element(),
@@ -637,24 +649,24 @@ fn render_block(ix: usize, block: &Block, mono: &Font, view: WeakEntity<Markdown
         body = body.child(
             div()
                 .flex_none()
-                .min_w(px(18.))
+                .min_w(px(18. * z))
                 .text_color(if checked { theme::accent() } else { theme::text_dim() })
                 .child(m.clone()),
         );
     } else if block.indent > 0 {
-        body = body.child(div().flex_none().min_w(px(18.)));
+        body = body.child(div().flex_none().min_w(px(18. * z)));
     }
     body = body.child(div().flex_1().min_w_0().child(content));
 
     let mut inner = div()
         .w_full()
-        .max_w(px(CONTENT_W))
-        .pl(px(block.indent.saturating_sub(1) as f32 * 22.))
+        .max_w(px(CONTENT_W * z))
+        .pl(px(block.indent.saturating_sub(1) as f32 * 22. * z))
         .child(body);
     for _ in 0..block.quote {
         inner = div()
             .w_full()
-            .max_w(px(CONTENT_W))
+            .max_w(px(CONTENT_W * z))
             .border_l_4()
             .border_color(theme::accent())
             .pl_3()
@@ -679,7 +691,14 @@ fn render_block(ix: usize, block: &Block, mono: &Font, view: WeakEntity<Markdown
 
 impl Render for MarkdownView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mono = Settings::get(cx).mono();
+        let s = Settings::get(cx);
+        let mono = s.mono();
+        let z = f32::from(s.font_size) / theme::DEFAULT_FONT_SIZE;
+        if s.font_size != self.font_size {
+            let ratio = s.font_size / self.font_size;
+            self.font_size = s.font_size;
+            self.remeasure(ratio);
+        }
         let blocks = self.blocks.clone();
         let view = cx.entity().downgrade();
         let truncated = self.truncated;
@@ -703,8 +722,8 @@ impl Render for MarkdownView {
             .bg(theme::bg())
             .text_color(theme::text())
             .font(body_font(false, false))
-            .text_size(px(BODY_SIZE))
-            .line_height(px(BODY_SIZE * 1.55))
+            .text_size(px(BODY_SIZE * z))
+            .line_height(px(BODY_SIZE * 1.55 * z))
             .on_action(cx.listener(|v, _: &PageDown, w, cx| {
                 v.list.scroll_by(v.page(w));
                 cx.notify()
@@ -748,7 +767,7 @@ impl Render for MarkdownView {
                         // Bottom padding.
                         return div().h(px(80.)).into_any_element();
                     }
-                    render_block(ix, &blocks[ix], &mono, view.clone())
+                    render_block(ix, &blocks[ix], &mono, z, view.clone())
                 })
                 .flex_1()
                 .size_full()

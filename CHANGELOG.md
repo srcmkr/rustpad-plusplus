@@ -2,6 +2,13 @@
 
 What changed in each version of rustpad++. The newest version is at the top.
 
+## Unreleased
+
+- Markdown files open in the rendered view; Ctrl+1 shows the source. New,
+  empty Markdown files still open as text.
+- Ctrl+mouse wheel zooms, one step per notch, in every view.
+- The rendered Markdown view zooms along with the other views.
+
 ## 0.1.0 - 2026-10-12
 
 The first public version.

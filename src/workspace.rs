@@ -5,10 +5,10 @@ use std::sync::{Arc, LazyLock};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use gpui::{
-    AnyElement, App, Context, Entity, ExternalPaths, FocusHandle, Focusable, FontWeight, Image,
-    ImageFormat, IntoElement, MouseButton, PathPromptOptions, PromptLevel, Render, SharedString,
-    Subscription, Task, Window, actions, deferred, div, img, linear_color_stop, linear_gradient,
-    prelude::*, px, rgb,
+    AnyElement, App, Context, DispatchPhase, Entity, ExternalPaths, FocusHandle, Focusable,
+    FontWeight, Image, ImageFormat, IntoElement, MouseButton, PathPromptOptions, PromptLevel, Render,
+    ScrollDelta, ScrollWheelEvent, SharedString, Subscription, Task, Window, actions, canvas,
+    deferred, div, img, linear_color_stop, linear_gradient, prelude::*, px, rgb,
 };
 
 #[path = "menu.rs"]
@@ -127,12 +127,15 @@ pub struct Workspace {
     bar: Option<Bar>,
     message: Option<SharedString>,
     job: Option<Job>,
+    /// Ctrl+wheel distance not yet turned into a zoom step, in lines.
+    wheel_zoom: f32,
     _ticker: Option<Task<()>>,
 }
 
 impl Workspace {
     pub fn new(files: Vec<PathBuf>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut ws = Workspace {
+            wheel_zoom: 0.0,
             menu: None,
             menu_by_hover: false,
             submenu: None,
@@ -222,6 +225,7 @@ impl Workspace {
         self.next_tab_id = self.next_tab_id.max(id + 1);
         let sample_len = buffer.len().min(8192);
         let kind = detect::detect(buffer.path.as_deref(), &buffer.slice(0..sample_len));
+        let empty = buffer.is_empty();
         let buffer = cx.new(|_| buffer);
         let text = cx.new(|cx| TextView::new(buffer.clone(), cx));
         let subs = vec![
@@ -234,6 +238,8 @@ impl Workspace {
         ];
         let mode = match kind {
             Kind::Binary => ViewMode::Hex,
+            // A new, empty Markdown file is there to be written, not read.
+            Kind::Markdown if !empty => ViewMode::Markdown,
             _ => ViewMode::Text,
         };
         self.tabs.push(Tab { id, backed_version: None, external: None, follow: false, buffer, kind, mode: ViewMode::Text, text, hex: None, tree: None, md: None, _subs: subs });
@@ -657,6 +663,20 @@ impl Workspace {
     pub(crate) fn quit(&mut self, _: &Quit, window: &mut Window, cx: &mut Context<Self>) {
         if self.confirm_quit(window, cx) {
             cx.quit();
+        }
+    }
+
+    /// Ctrl+wheel zooms like in a browser, one step per wheel notch.
+    fn wheel_zoom(&mut self, e: &ScrollWheelEvent, cx: &mut Context<Self>) {
+        // GPUI reports a notch as 3 lines on Linux.
+        self.wheel_zoom += match e.delta {
+            ScrollDelta::Lines(p) => p.y / 3.0,
+            ScrollDelta::Pixels(p) => f32::from(p.y) / 60.0,
+        };
+        let whole = self.wheel_zoom.trunc();
+        if whole != 0.0 {
+            self.wheel_zoom -= whole;
+            self.zoom(whole, cx);
         }
     }
 
@@ -1465,6 +1485,23 @@ impl Render for Workspace {
                     ws.open_path(p, window, cx);
                 }
             }))
+            .child({
+                // Capture phase: the views would scroll on the bubble phase first.
+                let ws = cx.entity().downgrade();
+                canvas(
+                    |_, _, _| {},
+                    move |_, _, window, _| {
+                        window.on_mouse_event(move |e: &ScrollWheelEvent, phase, _, cx| {
+                            if phase == DispatchPhase::Capture && e.modifiers.control {
+                                cx.stop_propagation();
+                                ws.update(cx, |ws, cx| ws.wheel_zoom(e, cx)).ok();
+                            }
+                        });
+                    },
+                )
+                .absolute()
+                .size_0()
+            })
             .child(div().font_family("DejaVu Sans").child(self.render_menubar(cx)))
             .child(
                 div()
