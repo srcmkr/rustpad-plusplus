@@ -6,31 +6,31 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/workspace.rs:1069
+#: src/workspace.rs:1124
 msgid "  value {value} ({hex})"
 msgstr ""
 
-#: src/workspace.rs:2163
+#: src/workspace.rs:2245
 msgid " Reloading discards your unsaved changes."
 msgstr ""
 
-#: src/menu.rs:199
+#: src/menu.rs:200
 msgid "About rustpad++"
 msgstr ""
 
-#: src/settings_window.rs:15 src/settings_window.rs:632
+#: src/settings_window.rs:15 src/settings_window.rs:634
 msgid "Advanced"
 msgstr ""
 
-#: src/settings_window.rs:632
+#: src/settings_window.rs:634
 msgid "Advanced options (encoding, line endings, indexing) will follow."
 msgstr ""
 
-#: src/menu.rs:189
+#: src/menu.rs:190
 msgid "All Settings…"
 msgstr ""
 
-#: src/settings_window.rs:468
+#: src/settings_window.rs:470
 msgid "Also with Ctrl + / Ctrl − / Ctrl 0"
 msgstr ""
 
@@ -38,15 +38,15 @@ msgstr ""
 msgid "Appearance"
 msgstr ""
 
-#: src/settings_window.rs:355
+#: src/settings_window.rs:357
 msgid "Applies immediately to all windows"
 msgstr ""
 
-#: src/settings_window.rs:414
+#: src/settings_window.rs:416
 msgid "Asks GitHub for a newer version 30 seconds after the start and every 6 hours. GitHub sees your IP address, nothing else."
 msgstr ""
 
-#: src/workspace.rs:1830
+#: src/workspace.rs:1910
 msgid "Author"
 msgstr ""
 
@@ -54,55 +54,55 @@ msgstr ""
 msgid "Automatic (system language)"
 msgstr ""
 
-#: src/workspace.rs:1105
+#: src/workspace.rs:1160
 msgid "Binary"
 msgstr ""
 
-#: src/workspace.rs:1832
+#: src/workspace.rs:1912
 msgid "Built with"
 msgstr ""
 
-#: src/workspace.rs:561 src/workspace.rs:623 src/workspace.rs:1276
+#: src/workspace.rs:581 src/workspace.rs:664 src/workspace.rs:1332
 msgid "Cancel"
 msgstr ""
 
-#: src/workspace.rs:1330
+#: src/workspace.rs:1386
 msgid "Cannot convert to {encoding}: “{char}” does not exist there"
 msgstr ""
 
-#: src/workspace.rs:260
+#: src/workspace.rs:270
 msgid "Cannot open {path}: {error}"
 msgstr ""
 
-#: src/workspace.rs:1823
+#: src/workspace.rs:1901
 msgid "Changelog"
 msgstr ""
 
-#: src/workspace.rs:1619
+#: src/workspace.rs:1695
 msgid "Check for Updates"
 msgstr ""
 
-#: src/menu.rs:195
+#: src/menu.rs:196
 msgid "Check for Updates…"
 msgstr ""
 
-#: src/settings_window.rs:413
+#: src/settings_window.rs:415
 msgid "Check for updates"
 msgstr ""
 
-#: src/workspace.rs:1594
+#: src/workspace.rs:1670
 msgid "Check now"
 msgstr ""
 
-#: src/update.rs:164
+#: src/update.rs:175
 msgid "Checking…"
 msgstr ""
 
-#: src/update.rs:168
+#: src/update.rs:179
 msgid "Checks shortly after the start."
 msgstr ""
 
-#: src/settings_window.rs:380
+#: src/settings_window.rs:382
 msgid "Clear ({count})"
 msgstr ""
 
@@ -110,15 +110,15 @@ msgstr ""
 msgid "Clear List"
 msgstr ""
 
-#: src/menu.rs:186
+#: src/menu.rs:187
 msgid "Color Scheme"
 msgstr ""
 
-#: src/settings_window.rs:568
+#: src/settings_window.rs:570
 msgid "Color scheme"
 msgstr ""
 
-#: src/workspace.rs:1239
+#: src/workspace.rs:1295
 msgid "Convert to"
 msgstr ""
 
@@ -126,11 +126,11 @@ msgstr ""
 msgid "Copy"
 msgstr ""
 
-#: src/settings_window.rs:228
+#: src/settings_window.rs:230
 msgid "Could not change the default application: {error}"
 msgstr ""
 
-#: src/update.rs:166
+#: src/update.rs:177
 msgid "Could not check for updates."
 msgstr ""
 
@@ -142,19 +142,19 @@ msgstr ""
 msgid "Cut"
 msgstr ""
 
-#: src/theme.rs:177
+#: src/theme.rs:183
 msgid "Dark"
 msgstr ""
 
-#: src/workspace.rs:1644
+#: src/workspace.rs:1720
 msgid "Debug build"
 msgstr ""
 
-#: src/settings_window.rs:481
+#: src/settings_window.rs:483
 msgid "Default"
 msgstr ""
 
-#: src/settings_window.rs:193
+#: src/settings_window.rs:195
 msgid "Default application"
 msgstr ""
 
@@ -170,15 +170,15 @@ msgstr ""
 msgid "Delete Line"
 msgstr ""
 
-#: src/workspace.rs:561
+#: src/workspace.rs:581
 msgid "Discard"
 msgstr ""
 
-#: src/workspace.rs:778
+#: src/workspace.rs:833
 msgid "Document changed while searching - nothing replaced"
 msgstr ""
 
-#: src/settings_window.rs:401 src/workspace.rs:1559 src/workspace.rs:1604
+#: src/settings_window.rs:403 src/workspace.rs:1635 src/workspace.rs:1680
 msgid "Download"
 msgstr ""
 
@@ -194,23 +194,23 @@ msgstr ""
 msgid "Editor"
 msgstr ""
 
-#: src/settings_window.rs:492
+#: src/settings_window.rs:494
 msgid "Editor display"
 msgstr ""
 
-#: src/views/json.rs:584
+#: src/views/csv.rs:427 src/views/json.rs:584
 msgid "Empty document"
 msgstr ""
 
-#: src/workspace.rs:986
+#: src/workspace.rs:1041
 msgid "Enter / F3: next   Shift+F3: previous   Esc: close"
 msgstr ""
 
-#: src/workspace.rs:828
+#: src/workspace.rs:883
 msgid "Enter a line number, 0x<hex offset> or <percent>%"
 msgstr ""
 
-#: src/workspace.rs:1053
+#: src/workspace.rs:1108
 msgid "Enter: replace and find next"
 msgstr ""
 
@@ -222,11 +222,11 @@ msgstr ""
 msgid "File Types"
 msgstr ""
 
-#: src/settings_window.rs:197
+#: src/settings_window.rs:199
 msgid "Files of these types open in rustpad++ when you double-click them in the file manager."
 msgstr ""
 
-#: src/workspace.rs:986
+#: src/workspace.rs:1041
 msgid "Find"
 msgstr ""
 
@@ -246,27 +246,27 @@ msgstr ""
 msgid "Find…"
 msgstr ""
 
-#: src/menu.rs:180
+#: src/menu.rs:181
 msgid "Follow End of File (tail -f)"
 msgstr ""
 
-#: src/workspace.rs:2212
+#: src/workspace.rs:2294
 msgid "Follow end"
 msgstr ""
 
-#: src/settings_window.rs:465
+#: src/settings_window.rs:467
 msgid "Font"
 msgstr ""
 
-#: src/settings_window.rs:486
+#: src/settings_window.rs:488
 msgid "Font family"
 msgstr ""
 
-#: src/settings_window.rs:467
+#: src/settings_window.rs:469
 msgid "Font size"
 msgstr ""
 
-#: src/settings_window.rs:367
+#: src/settings_window.rs:369
 msgid "Further launches open files as tabs in the running window (fastest)"
 msgstr ""
 
@@ -278,79 +278,83 @@ msgstr ""
 msgid "Go To…"
 msgstr ""
 
-#: src/workspace.rs:987
+#: src/workspace.rs:1042
 msgid "Go to"
 msgstr ""
 
-#: src/menu.rs:193
+#: src/menu.rs:194
 msgid "Help"
 msgstr ""
 
-#: src/menu.rs:175 src/workspace.rs:1812
+#: src/menu.rs:175 src/workspace.rs:1888
 msgid "Hex"
 msgstr ""
 
-#: src/settings_window.rs:377
+#: src/settings_window.rs:379
 msgid "History"
 msgstr ""
 
-#: src/workspace.rs:2216
+#: src/workspace.rs:2298
 msgid "Ignore"
 msgstr ""
 
-#: src/workspace.rs:1855
+#: src/workspace.rs:1935
 msgid "Inspired by Notepad++ by Don Ho."
 msgstr ""
 
-#: src/settings_window.rs:397 src/workspace.rs:1553 src/workspace.rs:1600
+#: src/settings_window.rs:399 src/workspace.rs:1629 src/workspace.rs:1676
 msgid "Install"
 msgstr ""
 
-#: src/settings_window.rs:406 src/workspace.rs:1609
+#: src/settings_window.rs:408 src/workspace.rs:1685
 msgid "Install for all users"
 msgstr ""
 
-#: src/workspace.rs:1620
+#: src/workspace.rs:1696
 msgid "Installed version: {version}"
 msgstr ""
 
-#: src/update.rs:176
+#: src/update.rs:187
 msgid "Installing the update…"
 msgstr ""
 
-#: src/menu.rs:176 src/workspace.rs:1813
+#: src/menu.rs:176 src/workspace.rs:1889
 msgid "JSON Tree"
 msgstr ""
 
-#: src/settings_window.rs:372
+#: src/settings_window.rs:374
 msgid "Keep all tabs including unsaved changes on quit, without asking"
 msgstr ""
 
-#: src/settings_window.rs:353
+#: src/settings_window.rs:355
 msgid "Language"
 msgstr ""
 
-#: src/views/markdown.rs:691
+#: src/views/markdown.rs:710
 msgid "Large document: only the first 16 MiB are rendered."
 msgstr ""
 
-#: src/workspace.rs:1787
+#: src/views/csv.rs:351
+msgid "Large document: only the first 16 MiB are shown."
+msgstr ""
+
+#: src/workspace.rs:1863
 msgid "Less editor. More text."
 msgstr ""
 
-#: src/theme.rs:209
+#: src/theme.rs:215
 msgid "Light"
 msgstr ""
 
-#: src/settings_window.rs:508
+#: src/settings_window.rs:510
 msgid "Line numbers"
 msgstr ""
 
-#: src/workspace.rs:820
+#: src/workspace.rs:875
 msgid "Line {line} not indexed yet ({pct}% scanned) - try 0x<offset> or <n>%"
 msgstr ""
 
-#: src/workspace.rs:1080
+#: src/workspace.rs:1135
 msgid "Ln {line}, Col {column}"
 msgstr ""
 
@@ -358,7 +362,7 @@ msgstr ""
 msgid "Log files"
 msgstr ""
 
-#: src/menu.rs:177 src/workspace.rs:1814
+#: src/menu.rs:177 src/workspace.rs:1890
 msgid "Markdown"
 msgstr ""
 
@@ -370,31 +374,31 @@ msgstr ""
 msgid "No Entries"
 msgstr ""
 
-#: src/workspace.rs:1793
+#: src/workspace.rs:1869
 msgid "No clutter, no waiting - just your file."
 msgstr ""
 
-#: src/settings_window.rs:379
+#: src/settings_window.rs:381
 msgid "No entries"
 msgstr ""
 
-#: src/update.rs:180
+#: src/update.rs:191
 msgid "No password prompt is available here. Run this in a terminal:"
 msgstr ""
 
-#: src/update.rs:177
+#: src/update.rs:188
 msgid "Not allowed, or wrong password."
 msgstr ""
 
-#: src/update.rs:167
+#: src/update.rs:178
 msgid "Not checked: the check is switched off."
 msgstr ""
 
-#: src/workspace.rs:776 src/workspace.rs:911
+#: src/workspace.rs:831 src/workspace.rs:966
 msgid "Not found"
 msgstr ""
 
-#: src/workspace.rs:1070
+#: src/workspace.rs:1125
 msgid "Offset {hex} ({offset}){byte}"
 msgstr ""
 
@@ -406,23 +410,27 @@ msgstr ""
 msgid "Paste"
 msgstr ""
 
-#: src/workspace.rs:1084
+#: src/workspace.rs:1139
 msgid "Pos {offset}"
 msgstr ""
 
-#: src/menu.rs:145 src/workspace.rs:623
+#: src/menu.rs:145 src/workspace.rs:664
 msgid "Quit"
 msgstr ""
 
-#: src/workspace.rs:622
+#: src/workspace.rs:663
 msgid "Quit anyway? The changes will be lost."
+msgstr ""
+
+#: src/views/csv.rs:349
+msgid "Reading table…"
 msgstr ""
 
 #: src/menu.rs:139
 msgid "Recent Files"
 msgstr ""
 
-#: src/settings_window.rs:378
+#: src/settings_window.rs:380
 msgid "Recent files"
 msgstr ""
 
@@ -430,69 +438,69 @@ msgstr ""
 msgid "Redo"
 msgstr ""
 
-#: src/workspace.rs:1644
+#: src/workspace.rs:1720
 msgid "Release build"
 msgstr ""
 
-#: src/workspace.rs:2208
+#: src/workspace.rs:2290
 msgid "Reload"
 msgstr ""
 
-#: src/workspace.rs:1304 src/workspace.rs:2130
+#: src/workspace.rs:1360 src/workspace.rs:2212
 msgid "Reload failed: {error}"
 msgstr ""
 
-#: src/views/markdown.rs:689
+#: src/views/markdown.rs:708
 msgid "Rendering Markdown…"
 msgstr ""
 
-#: src/workspace.rs:1276
+#: src/workspace.rs:1332
 msgid "Reopen"
 msgstr ""
 
-#: src/workspace.rs:1227
+#: src/workspace.rs:1283
 msgid "Reopen with encoding"
 msgstr ""
 
-#: src/workspace.rs:1274
+#: src/workspace.rs:1330
 msgid "Reopen {name} as {encoding}?"
 msgstr ""
 
-#: src/workspace.rs:1043 src/workspace.rs:1046
+#: src/workspace.rs:1098 src/workspace.rs:1101
 msgid "Replace"
 msgstr ""
 
-#: src/workspace.rs:1050
+#: src/workspace.rs:1105
 msgid "Replace all"
 msgstr ""
 
-#: src/workspace.rs:781
+#: src/workspace.rs:836
 msgid "Replaced {n} occurrence"
 msgid_plural "Replaced {n} occurrences"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/workspace.rs:788
+#: src/workspace.rs:843
 msgid "Replacing"
 msgstr ""
 
-#: src/workspace.rs:1822
+#: src/workspace.rs:1899
 msgid "Report a bug"
 msgstr ""
 
-#: src/workspace.rs:1831
+#: src/workspace.rs:1911
 msgid "Repository"
 msgstr ""
 
-#: src/settings_window.rs:371
+#: src/settings_window.rs:373
 msgid "Restore session"
 msgstr ""
 
-#: src/workspace.rs:1832
+#: src/workspace.rs:1912
 msgid "Rust and GPUI"
 msgstr ""
 
-#: src/menu.rs:141 src/workspace.rs:561
+#: src/menu.rs:141 src/workspace.rs:581
 msgid "Save"
 msgstr ""
 
@@ -504,31 +512,31 @@ msgstr ""
 msgid "Save As…"
 msgstr ""
 
-#: src/workspace.rs:559
+#: src/workspace.rs:579
 msgid "Save changes to {name}?"
 msgstr ""
 
-#: src/workspace.rs:539
+#: src/workspace.rs:559
 msgid "Save failed: {error}"
 msgstr ""
 
-#: src/workspace.rs:536
+#: src/workspace.rs:556
 msgid "Saved {path}"
 msgstr ""
 
-#: src/workspace.rs:546
+#: src/workspace.rs:566
 msgid "Saving"
 msgstr ""
 
-#: src/workspace.rs:908
+#: src/workspace.rs:963
 msgid "Search wrapped around"
 msgstr ""
 
-#: src/workspace.rs:917
+#: src/workspace.rs:972
 msgid "Searching"
 msgstr ""
 
-#: src/workspace.rs:1082
+#: src/workspace.rs:1137
 msgid "Sel {n} byte"
 msgid_plural "Sel {n} bytes"
 msgstr[0] ""
@@ -542,11 +550,11 @@ msgstr ""
 msgid "Selection too large for the clipboard (max 64 MiB)"
 msgstr ""
 
-#: src/menu.rs:184 src/workspace.rs:1833
+#: src/menu.rs:185 src/workspace.rs:1913
 msgid "Settings"
 msgstr ""
 
-#: src/placement.rs:19 src/settings_window.rs:43 src/settings_window.rs:56 src/settings_window.rs:358
+#: src/placement.rs:19 src/settings_window.rs:43 src/settings_window.rs:56 src/settings_window.rs:360
 msgid "Settings - rustpad++"
 msgstr ""
 
@@ -558,35 +566,39 @@ msgstr ""
 msgid "Shift"
 msgstr ""
 
-#: src/settings_window.rs:570
+#: src/settings_window.rs:572
 msgid "Show status bar"
 msgstr ""
 
-#: src/settings_window.rs:366
+#: src/settings_window.rs:368
 msgid "Single window"
 msgstr ""
 
-#: src/workspace.rs:1579
+#: src/workspace.rs:1655
 msgid "Skip this version"
 msgstr ""
 
-#: src/workspace.rs:1821
+#: src/workspace.rs:1898
 msgid "Source code"
 msgstr ""
 
-#: src/settings_window.rs:364
+#: src/settings_window.rs:366
 msgid "Startup"
 msgstr ""
 
-#: src/menu.rs:187
+#: src/menu.rs:188
 msgid "Status Bar"
 msgstr ""
 
-#: src/settings_window.rs:494
+#: src/settings_window.rs:496
 msgid "Tab width"
 msgstr ""
 
-#: src/menu.rs:174 src/workspace.rs:1811
+#: src/menu.rs:178 src/workspace.rs:1891
+msgid "Table"
+msgstr ""
+
+#: src/menu.rs:174 src/workspace.rs:1887
 msgid "Text"
 msgstr ""
 
@@ -594,15 +606,15 @@ msgstr ""
 msgid "Text files"
 msgstr ""
 
-#: src/workspace.rs:1859
+#: src/workspace.rs:1939
 msgid "Thanks for more than 20 years of a great example."
 msgstr ""
 
-#: src/update.rs:178
+#: src/update.rs:189
 msgid "The update did not work: {error}"
 msgstr ""
 
-#: src/settings_window.rs:447 src/workspace.rs:1633
+#: src/settings_window.rs:449 src/workspace.rs:1709
 msgid "This rustpad++ runs from its build folder. Installed for all users, it gets a menu entry and can update itself."
 msgstr ""
 
@@ -610,27 +622,27 @@ msgstr ""
 msgid "Undo"
 msgstr ""
 
-#: src/workspace.rs:1945
+#: src/workspace.rs:2027
 msgid "Unsaved changes to {name} not restored ({why}) - the backup is in ~/.local/state/rustpad/backup"
 msgstr ""
 
-#: src/settings_window.rs:379
+#: src/settings_window.rs:381
 msgid "Up to 5 files in the File menu"
 msgstr ""
 
-#: src/settings_window.rs:411
+#: src/settings_window.rs:413
 msgid "Updates"
 msgstr ""
 
-#: src/settings_window.rs:354
+#: src/settings_window.rs:356
 msgid "User interface"
 msgstr ""
 
-#: src/settings_window.rs:439 src/workspace.rs:1772
+#: src/settings_window.rs:441 src/workspace.rs:1848
 msgid "Version {version}"
 msgstr ""
 
-#: src/update.rs:163
+#: src/update.rs:174
 msgid "Version {version} is available."
 msgstr ""
 
@@ -638,31 +650,31 @@ msgstr ""
 msgid "View"
 msgstr ""
 
-#: src/workspace.rs:1577
+#: src/workspace.rs:1653
 msgid "What's new?"
 msgstr ""
 
-#: src/workspace.rs:1338
+#: src/workspace.rs:1394
 msgid "Will be saved as {encoding}"
 msgstr ""
 
-#: src/settings_window.rs:569
+#: src/settings_window.rs:571
 msgid "Window"
 msgstr ""
 
-#: src/menu.rs:179
+#: src/menu.rs:180
 msgid "Word Wrap"
 msgstr ""
 
-#: src/settings_window.rs:513
+#: src/settings_window.rs:515
 msgid "Word wrap"
 msgstr ""
 
-#: src/settings_window.rs:514
+#: src/settings_window.rs:516
 msgid "Wrap long lines at the window width instead of scrolling sideways"
 msgstr ""
 
-#: src/workspace.rs:1275
+#: src/workspace.rs:1331
 msgid "Your unsaved changes will be lost."
 msgstr ""
 
@@ -670,11 +682,11 @@ msgstr ""
 msgid "document "
 msgstr ""
 
-#: src/workspace.rs:1100
+#: src/workspace.rs:1155
 msgid "following end of file"
 msgstr ""
 
-#: src/workspace.rs:1096
+#: src/workspace.rs:1151
 msgid "indexing lines {pct}%"
 msgstr ""
 
@@ -690,7 +702,7 @@ msgid_plural "keys"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/workspace.rs:987
+#: src/workspace.rs:1042
 msgid "line number, 0x<offset> or <percent>%"
 msgstr ""
 
@@ -698,11 +710,11 @@ msgstr ""
 msgid "line {line}"
 msgstr ""
 
-#: src/update.rs:165
+#: src/update.rs:176
 msgid "rustpad++ is up to date."
 msgstr ""
 
-#: src/workspace.rs:1550
+#: src/workspace.rs:1626
 msgid "rustpad++ {version} is available."
 msgstr ""
 
@@ -718,7 +730,7 @@ msgstr ""
 msgid "the character “{char}” cannot be saved as {encoding}"
 msgstr ""
 
-#: src/workspace.rs:1941
+#: src/workspace.rs:2023
 msgid "the file was changed externally"
 msgstr ""
 
@@ -732,65 +744,65 @@ msgid_plural "values"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/workspace.rs:1360
+#: src/workspace.rs:1416
 msgid "{encoding} with BOM"
 msgstr ""
 
-#: src/settings_window.rs:206
+#: src/settings_window.rs:208
 msgid "{extensions} · checking…"
 msgstr ""
 
-#: src/settings_window.rs:207
+#: src/settings_window.rs:209
 msgid "{extensions} · currently: {app}"
 msgstr ""
 
-#: src/settings_window.rs:208
+#: src/settings_window.rs:210
 msgid "{extensions} · no default application"
 msgstr ""
 
-#: src/workspace.rs:2089
+#: src/workspace.rs:2171
 msgid "{name} was truncated externally and reloaded"
 msgstr ""
 
-#: src/workspace.rs:621
+#: src/workspace.rs:662
 msgid "{n} document with unsaved changes."
 msgid_plural "{n} documents with unsaved changes."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/workspace.rs:1095
+#: src/workspace.rs:1150
 msgid "{n} line"
 msgid_plural "{n} lines"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/workspace.rs:493
+#: src/workspace.rs:513
 msgid "{n} untitled file: please save it with “Save As”"
 msgid_plural "{n} untitled files: please save them one by one with “Save As”"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/workspace.rs:253
+#: src/workspace.rs:263
 msgid "{path} is a directory"
 msgstr ""
 
-#: src/workspace.rs:2165
+#: src/workspace.rs:2247
 msgid "“{name}” has grown outside rustpad++.{lose}"
 msgstr ""
 
-#: src/workspace.rs:2166
+#: src/workspace.rs:2248
 msgid "“{name}” was changed outside rustpad++.{lose}"
 msgstr ""
 
-#: src/workspace.rs:2168
+#: src/workspace.rs:2250
 msgid "“{name}” was deleted or moved. The content stays open; saving creates the file again."
 msgstr ""
 
-#: src/workspace.rs:2167
+#: src/workspace.rs:2249
 msgid "“{name}” was overwritten outside rustpad++. Please reload.{lose}"
 msgstr ""
 
-#: src/workspace.rs:2169
+#: src/workspace.rs:2251
 msgid "“{name}” was truncated externally. Your changes are kept; parts beyond the new end of file are missing."
 msgstr ""
 

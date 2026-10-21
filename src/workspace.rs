@@ -22,6 +22,7 @@ use crate::doc::detect::{self, Kind};
 use crate::doc::encoding::{self, Encoding};
 use crate::doc::rows;
 use crate::theme::{self, Settings};
+use crate::views::csv::CsvView;
 use crate::views::hex::HexView;
 use crate::views::json::JsonView;
 use crate::views::markdown::MarkdownView;
@@ -42,6 +43,7 @@ actions!(
         ShowHex,
         ShowTree,
         ShowMarkdown,
+        ShowTable,
         CycleView,
         Find,
         FindNext,
@@ -75,6 +77,7 @@ struct Tab {
     hex: Option<Entity<HexView>>,
     tree: Option<Entity<JsonView>>,
     md: Option<Entity<MarkdownView>>,
+    table: Option<Entity<CsvView>>,
     _subs: Vec<Subscription>,
 }
 
@@ -242,7 +245,7 @@ impl Workspace {
             Kind::Markdown if !empty => ViewMode::Markdown,
             _ => ViewMode::Text,
         };
-        self.tabs.push(Tab { id, backed_version: None, external: None, follow: false, buffer, kind, mode: ViewMode::Text, text, hex: None, tree: None, md: None, _subs: subs });
+        self.tabs.push(Tab { id, backed_version: None, external: None, follow: false, buffer, kind, mode: ViewMode::Text, text, hex: None, tree: None, md: None, table: None, _subs: subs });
         self.active = self.tabs.len() - 1;
         self.set_mode(mode, window, cx);
         self.update_title(window, cx);
@@ -364,6 +367,7 @@ impl Workspace {
             ViewMode::Hex => t.hex.as_ref().map(|v| v.focus_handle(cx)).unwrap_or(t.text.focus_handle(cx)),
             ViewMode::Tree => t.tree.as_ref().map(|v| v.focus_handle(cx)).unwrap_or(t.text.focus_handle(cx)),
             ViewMode::Markdown => t.md.as_ref().map(|v| v.focus_handle(cx)).unwrap_or(t.text.focus_handle(cx)),
+            ViewMode::Table => t.table.as_ref().map(|v| v.focus_handle(cx)).unwrap_or(t.text.focus_handle(cx)),
         };
         window.focus(&handle);
     }
@@ -415,6 +419,14 @@ impl Workspace {
                     self.tabs[i].md = Some(v);
                 }
             }
+            ViewMode::Table => {
+                if self.tabs[i].table.is_none() {
+                    let v = cx.new(|cx| CsvView::new(buffer, window, cx));
+                    let sub = cx.subscribe_in(&v, window, |ws, _, e: &JumpTo, window, cx| ws.jump_to_text(e.0, window, cx));
+                    self.tabs[i]._subs.push(sub);
+                    self.tabs[i].table = Some(v);
+                }
+            }
         }
         self.tabs[i].mode = mode;
         if self.bar.is_none() {
@@ -427,7 +439,8 @@ impl Workspace {
         match kind {
             Kind::Json => &[ViewMode::Text, ViewMode::Tree, ViewMode::Hex],
             Kind::Markdown => &[ViewMode::Text, ViewMode::Markdown, ViewMode::Hex],
-            Kind::Text | Kind::Binary => &[ViewMode::Text, ViewMode::Hex, ViewMode::Tree, ViewMode::Markdown],
+            Kind::Csv => &[ViewMode::Text, ViewMode::Table, ViewMode::Hex],
+            Kind::Text | Kind::Binary => &[ViewMode::Text, ViewMode::Hex, ViewMode::Tree, ViewMode::Markdown, ViewMode::Table],
         }
     }
 
@@ -1147,6 +1160,7 @@ impl Workspace {
             Kind::Binary => right.push(tr!("Binary").into()),
             Kind::Json => right.push("JSON".into()),
             Kind::Markdown => right.push("Markdown".into()),
+            Kind::Csv => right.push("CSV".into()),
             Kind::Text => {}
         }
         let bom = b.bom.then(|| {
@@ -1429,6 +1443,7 @@ impl Render for Workspace {
             ViewMode::Hex => t.hex.clone().map(|v| v.into_any_element()).unwrap_or_else(|| div().into_any_element()),
             ViewMode::Tree => t.tree.clone().map(|v| v.into_any_element()).unwrap_or_else(|| div().into_any_element()),
             ViewMode::Markdown => t.md.clone().map(|v| v.into_any_element()).unwrap_or_else(|| div().into_any_element()),
+            ViewMode::Table => t.table.clone().map(|v| v.into_any_element()).unwrap_or_else(|| div().into_any_element()),
         };
         let s = Settings::get(cx);
         let status_bar = s.status_bar;
@@ -1466,6 +1481,7 @@ impl Render for Workspace {
             .on_action(cx.listener(|ws, _: &ShowHex, w, cx| ws.set_mode(ViewMode::Hex, w, cx)))
             .on_action(cx.listener(|ws, _: &ShowTree, w, cx| ws.set_mode(ViewMode::Tree, w, cx)))
             .on_action(cx.listener(|ws, _: &ShowMarkdown, w, cx| ws.set_mode(ViewMode::Markdown, w, cx)))
+            .on_action(cx.listener(|ws, _: &ShowTable, w, cx| ws.set_mode(ViewMode::Table, w, cx)))
             .on_action(cx.listener(|ws, _: &CycleView, w, cx| {
                 let modes = Self::available_modes(ws.tab().kind);
                 let i = modes.iter().position(|m| *m == ws.tab().mode).unwrap_or(0);
@@ -1871,7 +1887,8 @@ impl Workspace {
                             .child(tile("Aa", tr!("Text")))
                             .child(tile("0x", tr!("Hex")))
                             .child(tile("{ }", tr!("JSON Tree")))
-                            .child(tile("#", tr!("Markdown"))),
+                            .child(tile("#", tr!("Markdown")))
+                            .child(tile("▦", tr!("Table"))),
                     )
                     .child(
                         div()
@@ -1965,6 +1982,7 @@ fn mode_name(m: ViewMode) -> &'static str {
         ViewMode::Hex => "hex",
         ViewMode::Tree => "tree",
         ViewMode::Markdown => "markdown",
+        ViewMode::Table => "table",
     }
 }
 
@@ -1974,6 +1992,7 @@ fn mode_from_name(s: &str) -> Option<ViewMode> {
         "hex" => ViewMode::Hex,
         "tree" => ViewMode::Tree,
         "markdown" => ViewMode::Markdown,
+        "table" => ViewMode::Table,
         _ => return None,
     })
 }

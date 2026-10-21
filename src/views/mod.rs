@@ -1,3 +1,4 @@
+pub mod csv;
 pub mod hex;
 pub mod json;
 pub mod markdown;
@@ -9,6 +10,7 @@ pub enum ViewMode {
     Hex,
     Tree,
     Markdown,
+    Table,
 }
 
 /// Emitted by the structured views: show this byte offset in the text view.

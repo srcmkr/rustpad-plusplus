@@ -2,6 +2,15 @@
 
 What changed in each version of rustpad++. The newest version is at the top.
 
+## Unreleased
+
+- CSV and TSV files can be shown as a table (View > Table, Ctrl+5); they still
+  open as text. Clicking a column header sorts by it, numbers by value;
+  dragging a header's right edge changes the column's width, a double-click
+  there resets it. Double-click or Enter on a row jumps to it in the text.
+- Opening rustpad++ from a terminal that is itself an AppImage (Tabby, for
+  example) no longer makes file managers open files with that program.
+
 ## 0.2.0 - 2026-10-17
 
 - Markdown files open in the rendered view; Ctrl+1 shows the source. New,

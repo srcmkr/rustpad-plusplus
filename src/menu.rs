@@ -175,6 +175,7 @@ impl Workspace {
                     view_item(ViewMode::Hex, tr!("Hex"), "Ctrl+2"),
                     view_item(ViewMode::Tree, tr!("JSON Tree"), "Ctrl+3"),
                     view_item(ViewMode::Markdown, tr!("Markdown"), "Ctrl+4"),
+                    view_item(ViewMode::Table, tr!("Table"), "Ctrl+5"),
                     Item::Sep,
                     check(tr!("Word Wrap"), None, settings.word_wrap, |ws, _, cx| ws.toggle_word_wrap(cx)),
                     check(tr!("Follow End of File (tail -f)"), None, self.tab().follow, |ws, _, cx| ws.toggle_follow(cx)),

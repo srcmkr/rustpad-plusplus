@@ -7,6 +7,7 @@ pub enum Kind {
     Text,
     Json,
     Markdown,
+    Csv,
     Binary,
 }
 
@@ -18,6 +19,7 @@ pub fn detect(path: Option<&Path>, sample: &[u8]) -> Kind {
     match ext.as_str() {
         "json" | "jsonl" | "ndjson" | "geojson" | "jsonc" | "har" | "ipynb" => return Kind::Json,
         "md" | "markdown" | "mdown" | "mkd" => return Kind::Markdown,
+        "csv" | "tsv" => return Kind::Csv,
         _ => {}
     }
     if looks_binary(sample) {
@@ -58,6 +60,7 @@ mod tests {
     fn kinds() {
         assert_eq!(detect(None, b"  {\"a\":1}"), Kind::Json);
         assert_eq!(detect(Some(Path::new("x.MD")), b"{"), Kind::Markdown);
+        assert_eq!(detect(Some(Path::new("x.csv")), b"a;b"), Kind::Csv);
         assert_eq!(detect(None, b"\x7fELF\x02\x01\x01\0\0"), Kind::Binary);
         assert_eq!(detect(None, "héllo".as_bytes()), Kind::Text);
     }

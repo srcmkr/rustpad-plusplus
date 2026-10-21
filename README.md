@@ -6,7 +6,7 @@
 
 **A fast text editor for Linux, in the spirit of [Notepad++](https://notepad-plus-plus.org/) by Don Ho.**
 
-**Opens files of any size instantly: as text, hex, JSON tree or Markdown.**
+**Opens files of any size instantly: as text, hex, JSON tree, Markdown or table.**
 
 *Less editor. More text.*
 
@@ -35,9 +35,9 @@ make it executable and start it.
   not loaded. A 1 TiB file is open at once, a 1.7 GiB log with 25 million lines
   is usable while its lines are counted in the background, and the first frame
   is on screen in under 300 ms.
-- **Four views of the same file**: text, hex, a JSON tree that reads huge
-  documents lazily, and rendered Markdown. <kbd>Ctrl</kbd>+<kbd>1</kbd> to
-  <kbd>4</kbd> switch, <kbd>Ctrl</kbd>+<kbd>E</kbd> cycles.
+- **Five views of the same file**: text, hex, a JSON tree that reads huge
+  documents lazily, rendered Markdown and a sortable table for CSV.
+  <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>5</kbd> switch, <kbd>Ctrl</kbd>+<kbd>E</kbd> cycles.
 - **Editing without surprises**: find and replace (replace all is a single undo
   step), go to a line, a byte offset or a percentage, word wrap, duplicate and
   delete lines.
@@ -91,7 +91,7 @@ rustpad -n                       # a separate window that leaves the session alo
 | <kbd>Ctrl</kbd>+<kbd>F</kbd>, <kbd>F3</kbd>, <kbd>Shift</kbd>+<kbd>F3</kbd> | find, next, previous |
 | <kbd>Ctrl</kbd>+<kbd>H</kbd> | find and replace; <kbd>Tab</kbd> switches fields, <kbd>Enter</kbd> replaces and goes on |
 | <kbd>Ctrl</kbd>+<kbd>G</kbd> | go to `1250` (line), `0x1F400` (byte offset) or `75%` |
-| <kbd>Ctrl</kbd>+<kbd>1</kbd> … <kbd>4</kbd> | text, hex, JSON tree, Markdown |
+| <kbd>Ctrl</kbd>+<kbd>1</kbd> … <kbd>5</kbd> | text, hex, JSON tree, Markdown, table |
 | <kbd>Ctrl</kbd>+<kbd>D</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd> | duplicate line, delete line |
 | <kbd>Ctrl</kbd>+<kbd>+</kbd>, <kbd>Ctrl</kbd>+<kbd>-</kbd>, <kbd>Ctrl</kbd>+<kbd>0</kbd> | zoom |
 | <kbd>Ctrl</kbd>+<kbd>,</kbd> | settings |

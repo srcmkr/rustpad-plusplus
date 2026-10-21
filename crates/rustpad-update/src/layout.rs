@@ -54,11 +54,20 @@ impl Install {
     }
 
     fn detect() -> Self {
-        if let Some(image) = std::env::var_os("APPIMAGE").map(PathBuf::from).filter(|p| p.is_file()) {
-            return Install::AppImage(image);
-        }
         let exe = std::env::current_exe().and_then(|e| e.canonicalize()).unwrap_or_default();
-        Self::of(&exe)
+        let var = |k| std::env::var_os(k).map(PathBuf::from);
+        let appdir = var("APPDIR").and_then(|d| d.canonicalize().ok());
+        match Self::image(&exe, var("APPIMAGE"), appdir) {
+            Some(image) if image.is_file() => Install::AppImage(image),
+            _ => Self::of(&exe),
+        }
+    }
+
+    /// The AppImage file, if `exe` runs from inside its mount at `appdir`.
+    /// A program started from another AppImage (a terminal, say) inherits
+    /// that one's variables, and its own path lies outside the mount.
+    fn image(exe: &Path, appimage: Option<PathBuf>, appdir: Option<PathBuf>) -> Option<PathBuf> {
+        appdir.filter(|d| exe.starts_with(d)).and(appimage)
     }
 
     fn of(exe: &Path) -> Self {
@@ -103,5 +112,14 @@ mod tests {
         assert_eq!(Install::of(Path::new("/home/me/rustpad++/target/release/rustpad")), Install::Build);
         assert_eq!(fill("Exec=@APP@ %F", &DEB), "Exec=/usr/bin/rustpad %F");
         assert!(Install::Local.is_system() && !Install::Build.is_system());
+    }
+
+    #[test]
+    fn ignores_appimage_it_was_started_from() {
+        let mount = || Some(PathBuf::from("/tmp/.mount_rustpaXYZ"));
+        let image = || Some(PathBuf::from("/home/me/rustpad.AppImage"));
+        assert_eq!(Install::image(Path::new("/tmp/.mount_rustpaXYZ/usr/bin/rustpad"), image(), mount()), image());
+        assert_eq!(Install::image(Path::new("/usr/local/bin/rustpad"), image(), mount()), None);
+        assert_eq!(Install::image(Path::new("/usr/local/bin/rustpad"), image(), None), None);
     }
 }

@@ -175,6 +175,7 @@ fn bind_keys(cx: &mut App) {
     let h = Some("HexView");
     let j = Some("JsonView");
     let m = Some("MarkdownView");
+    let c = Some("CsvView");
     cx.bind_keys([
         // Global
         KeyBinding::new("ctrl-o", Open, None),
@@ -194,6 +195,7 @@ fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-2", ShowHex, None),
         KeyBinding::new("ctrl-3", ShowTree, None),
         KeyBinding::new("ctrl-4", ShowMarkdown, None),
+        KeyBinding::new("ctrl-5", ShowTable, None),
         KeyBinding::new("ctrl-e", CycleView, None),
         KeyBinding::new("ctrl-f", Find, None),
         KeyBinding::new("f3", FindNext, None),
@@ -285,5 +287,13 @@ fn bind_keys(cx: &mut App) {
         KeyBinding::new("pagedown", PageDown, m),
         KeyBinding::new("ctrl-home", DocStart, m),
         KeyBinding::new("ctrl-end", DocEnd, m),
+        // CSV table
+        KeyBinding::new("up", MoveUp, c),
+        KeyBinding::new("down", MoveDown, c),
+        KeyBinding::new("enter", Newline, c),
+        KeyBinding::new("pageup", PageUp, c),
+        KeyBinding::new("pagedown", PageDown, c),
+        KeyBinding::new("ctrl-home", DocStart, c),
+        KeyBinding::new("ctrl-end", DocEnd, c),
     ]);
 }

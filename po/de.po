@@ -746,3 +746,12 @@ msgstr "rustpad++ ist auf dem neuesten Stand."
 
 msgid "rustpad++ {version} is available."
 msgstr "rustpad++ {version} ist verfügbar."
+
+msgid "Large document: only the first 16 MiB are shown."
+msgstr "Großes Dokument: nur die ersten 16 MiB werden angezeigt."
+
+msgid "Reading table…"
+msgstr "Tabelle wird gelesen…"
+
+msgid "Table"
+msgstr "Tabelle"
