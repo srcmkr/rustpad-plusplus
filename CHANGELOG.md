@@ -2,7 +2,7 @@
 
 What changed in each version of rustpad++. The newest version is at the top.
 
-## Unreleased
+## 0.3.0 - 2026-10-21
 
 - CSV and TSV files can be shown as a table (View > Table, Ctrl+5); they still
   open as text. Clicking a column header sorts by it, numbers by value;
