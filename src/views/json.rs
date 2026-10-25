@@ -11,9 +11,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{
-    App, Context, Entity, EventEmitter, FocusHandle, Focusable, Hsla, IntoElement, MouseButton,
-    MouseDownEvent, Render, ScrollStrategy, SharedString, Stateful, Task, UniformListScrollHandle,
-    Window, div, prelude::*, px, uniform_list,
+    App, Context, Entity, EventEmitter, FocusHandle, Focusable, HighlightStyle, Hsla, IntoElement,
+    MouseButton, MouseDownEvent, Render, ScrollStrategy, SharedString, Stateful, StyledText, Task,
+    UniformListScrollHandle, Window, div, prelude::*, px, uniform_list,
 };
 
 use super::JumpTo;
@@ -387,6 +387,18 @@ fn read_child(rd: &mut Rd, parent: VKind) -> Result<Child, ScanErr> {
         _ => String::new(),
     };
     Ok(Child { key, start, end, kind, preview })
+}
+
+/// Pieces of text in their colors, laid out as one text.
+fn colored(parts: Vec<(String, Hsla)>) -> StyledText {
+    let mut text = String::new();
+    let mut highlights = Vec::with_capacity(parts.len());
+    for (t, color) in parts {
+        let start = text.len();
+        text.push_str(&t);
+        highlights.push((start..text.len(), HighlightStyle { color: Some(color), ..Default::default() }));
+    }
+    StyledText::new(text).with_highlights(highlights)
 }
 
 fn truncate_chars(s: &mut String, cut: bool) {
@@ -843,7 +855,7 @@ impl JsonView {
     }
 
     fn on_row_down(&mut self, row: usize, e: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         self.selected = row;
         match (self.rows.get(row).copied(), e.click_count) {
             (Some(RowItem::More(_)), _) => self.activate(row, cx),
@@ -921,7 +933,7 @@ impl JsonView {
                             .text_size(s.font_size * 0.75)
                             .on_mouse_down(MouseButton::Left, cx.listener(move |v, _: &MouseDownEvent, w, cx| {
                                 cx.stop_propagation();
-                                w.focus(&v.focus);
+                                w.focus(&v.focus, cx);
                                 if let Some(r) = v.rows.iter().position(|r| *r == RowItem::Node(i)) {
                                     v.selected = r;
                                 }
@@ -929,17 +941,19 @@ impl JsonView {
                             }))
                             .child(arrow),
                     );
+                    // One text with colored ranges: separate elements would lose the
+                    // space after ":", which does not count toward a text's width.
+                    let mut parts: Vec<(String, Hsla)> = Vec::new();
                     match &n.label {
                         Label::Root => {
                             let name = if n.kind == VKind::Seq { tr!("document ") } else { "$ " };
-                            row = row.child(div().text_color(theme::text_dim()).child(name));
+                            parts.push((name.to_string(), theme::text_dim()));
                         }
                         Label::Key(k) => {
                             let mut k = k.replace(['\n', '\r'], " ");
                             truncate_chars(&mut k, false);
-                            row = row
-                                .child(div().text_color(theme::syn_key()).child(format!("\"{k}\"")))
-                                .child(div().text_color(theme::syn_punct()).child(": "));
+                            parts.push((format!("\"{k}\""), theme::syn_key()));
+                            parts.push((": ".into(), theme::syn_punct()));
                         }
                         Label::Index(k) => {
                             let lbl = if self.nodes[n.parent.unwrap_or(0)].kind == VKind::Seq {
@@ -947,9 +961,8 @@ impl JsonView {
                             } else {
                                 format!("[{k}]")
                             };
-                            row = row
-                                .child(div().text_color(theme::text_dim()).child(lbl))
-                                .child(div().text_color(theme::syn_punct()).child(": "));
+                            parts.push((lbl, theme::text_dim()));
+                            parts.push((": ".into(), theme::syn_punct()));
                         }
                     }
                     let collapsed_container = n.kind.is_container() && !n.expanded;
@@ -960,11 +973,10 @@ impl JsonView {
                         VKind::Object | VKind::Array | VKind::Seq => (self.summary(i), theme::text_dim()),
                     };
                     match collapsed_container.then(|| self.inline_preview(i, cx)).flatten() {
-                        Some(segments) => {
-                            row = row.children(segments.into_iter().map(|(t, c)| div().text_color(c).child(t)));
-                        }
-                        None => row = row.child(div().text_color(color).child(text)),
+                        Some(segments) => parts.extend(segments),
+                        None => parts.push((text, color)),
                     }
+                    row = row.child(colored(parts));
                 }
                 RowItem::More(i) => {
                     let n = &self.nodes[i];
@@ -1158,7 +1170,7 @@ impl Render for JsonView {
                     .child(msg.clone())
                     .into_any_element(),
                 None => uniform_list("json-rows", self.rows.len(), cx.processor(|v, range, _, cx| v.render_rows(range, cx)))
-                    .track_scroll(self.scroll.clone())
+                    .track_scroll(&self.scroll)
                     .flex_1()
                     .into_any_element(),
             })

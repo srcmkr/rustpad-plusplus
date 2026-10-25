@@ -25,6 +25,10 @@ use crate::theme::{self, Settings};
 const MAX_RENDER: u64 = 16 << 20;
 /// Above this size parsing happens off the main thread.
 const SYNC_LIMIT: usize = 1 << 20;
+/// Longer paragraphs and code blocks are split into pieces of about this
+/// many bytes: the list lays out whole blocks, so a JSON file shown as one
+/// huge paragraph would be laid out again on every frame.
+const PIECE: usize = 8 << 10;
 const BODY_FAMILY: &str = "DejaVu Sans";
 const BODY_SIZE: f32 = 15.0;
 const CONTENT_W: f32 = 860.0;
@@ -80,6 +84,57 @@ impl Inline {
     fn is_empty(&self) -> bool {
         self.text.trim().is_empty()
     }
+
+    /// Splits off everything from byte `at` on, which must be a char boundary.
+    fn split_off(&mut self, at: usize) -> Inline {
+        let text = self.text.split_off(at);
+        let mut runs = Vec::new();
+        let mut pos = 0;
+        self.runs.retain_mut(|(len, style)| {
+            let start = pos;
+            pos += *len;
+            if pos <= at {
+                true
+            } else if start >= at {
+                runs.push((*len, *style));
+                false
+            } else {
+                runs.push((pos - at, *style));
+                *len = at - start;
+                true
+            }
+        });
+        let mut links = Vec::new();
+        self.links.retain(|(r, url)| {
+            if r.start >= at {
+                links.push((r.start - at..r.end - at, url.clone()));
+                false
+            } else {
+                true
+            }
+        });
+        Inline { text, runs, links }
+    }
+
+    /// Byte positions to split a long text at: spaces about every [`PIECE`]
+    /// bytes, never inside a link.
+    fn piece_breaks(&self) -> Vec<usize> {
+        let mut breaks = Vec::new();
+        let mut from = PIECE;
+        // Bytes, not chars: a space is ASCII, so it is always a char boundary.
+        while from < self.text.len() {
+            let Some(found) = self.text.as_bytes()[from..].iter().position(|&b| b == b' ') else { break };
+            let at = from + found;
+            match self.links.iter().find(|(r, _)| r.contains(&at)) {
+                Some((r, _)) => from = r.end,
+                None => {
+                    breaks.push(at);
+                    from = at + PIECE;
+                }
+            }
+        }
+        breaks
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -102,6 +157,77 @@ pub struct Block {
     pub quote: u8,
     /// List marker ("•", "3.", "☑") shown before the first block of an item.
     pub marker: Option<String>,
+    /// Which part of a split long block this is.
+    pub piece: Piece,
+}
+
+/// Long blocks are shown as several pieces without gaps between them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Piece {
+    #[default]
+    Whole,
+    First,
+    Middle,
+    Last,
+}
+
+impl Piece {
+    fn opens(self) -> bool {
+        matches!(self, Piece::Whole | Piece::First)
+    }
+
+    fn closes(self) -> bool {
+        matches!(self, Piece::Whole | Piece::Last)
+    }
+}
+
+/// Splits long paragraphs and code blocks into pieces (see [`PIECE`]).
+fn split_long(blocks: Vec<Block>) -> Vec<Block> {
+    let mut out = Vec::with_capacity(blocks.len());
+    for block in blocks {
+        let pieces: Vec<BlockKind> = match &block.kind {
+            BlockKind::Paragraph(inline) if inline.text.len() > PIECE => {
+                let mut rest = inline.clone();
+                let mut parts = Vec::new();
+                // From the back, so earlier positions stay valid.
+                for at in rest.piece_breaks().into_iter().rev() {
+                    let mut tail = rest.split_off(at);
+                    // Drop the space the piece breaks at.
+                    tail = tail.split_off(1);
+                    parts.push(BlockKind::Paragraph(tail));
+                }
+                parts.push(BlockKind::Paragraph(rest));
+                parts.reverse();
+                parts
+            }
+            BlockKind::Code { lang, text } if text.len() > PIECE => {
+                let mut parts = Vec::new();
+                let mut start = 0;
+                while start < text.len() {
+                    let from = (start + PIECE).min(text.len());
+                    let end = text.as_bytes()[from..].iter().position(|&b| b == b'\n').map_or(text.len(), |i| from + i);
+                    parts.push(BlockKind::Code { lang: lang.clone(), text: text[start..end].to_string() });
+                    start = end + 1;
+                }
+                parts
+            }
+            _ => {
+                out.push(block);
+                continue;
+            }
+        };
+        let last = pieces.len() - 1;
+        for (i, kind) in pieces.into_iter().enumerate() {
+            let piece = match i {
+                0 if last == 0 => Piece::Whole,
+                0 => Piece::First,
+                i if i == last => Piece::Last,
+                _ => Piece::Middle,
+            };
+            out.push(Block { kind, marker: if i == 0 { block.marker.clone() } else { None }, piece, ..block.clone() });
+        }
+    }
+    out
 }
 
 enum Ctx {
@@ -168,6 +294,7 @@ impl Converter {
             indent: self.lists.len() as u8,
             quote: self.quote,
             marker,
+            piece: Piece::Whole,
         });
     }
 
@@ -389,6 +516,11 @@ impl Converter {
 
 /// Convert Markdown source into a flat block list.
 pub fn parse_blocks(src: &str) -> Vec<Block> {
+    split_long(convert(src))
+}
+
+/// The blocks as Markdown has them, long ones not yet split.
+fn convert(src: &str) -> Vec<Block> {
     let opts = Options::ENABLE_TABLES
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS
@@ -544,6 +676,7 @@ fn styled(inline: &Inline, mono: &Font, base: Hsla, force_bold: bool) -> StyledT
                 background_color: s.code.then(theme::bg_alt),
                 underline: s.link.then(|| UnderlineStyle { thickness: px(1.), color: Some(theme::accent()), wavy: false }),
                 strikethrough: s.strike.then(|| StrikethroughStyle { thickness: px(1.), color: Some(base) }),
+                letter_spacing: None,
             }
         })
         .collect();
@@ -593,16 +726,17 @@ fn render_block(ix: usize, block: &Block, mono: &Font, z: f32, view: WeakEntity<
             .flex()
             .flex_col()
             .bg(theme::bg_panel())
-            .border_1()
             .border_color(theme::border())
-            .rounded_md()
+            .border_l_1()
+            .border_r_1()
             .px_3()
-            .py_2()
+            .when(block.piece.opens(), |d| d.border_t_1().rounded_t_md().pt_2())
+            .when(block.piece.closes(), |d| d.border_b_1().rounded_b_md().pb_2())
             .font(mono.clone())
             .text_size(px(13. * z))
             .line_height(px(19. * z))
             .text_color(theme::text())
-            .when(!lang.is_empty(), |d| {
+            .when(!lang.is_empty() && block.piece.opens(), |d| {
                 d.child(div().text_size(px(11. * z)).text_color(theme::text_faint()).child(lang.clone()))
             })
             .child(text.clone())
@@ -679,7 +813,9 @@ fn render_block(ix: usize, block: &Block, mono: &Font, z: f32, view: WeakEntity<
         .flex()
         .justify_center()
         .px_6()
-        .py(px(5.))
+        // Pieces of a split block join without a gap.
+        .when(block.piece.opens(), |d| d.pt(px(5.)))
+        .when(block.piece.closes(), |d| d.pb(px(5.)))
         .on_mouse_down(MouseButton::Left, move |e, _, cx| {
             if e.click_count == 2 {
                 view.update(cx, |_, cx| cx.emit(JumpTo(offset))).ok();
@@ -749,7 +885,7 @@ impl Render for MarkdownView {
                 v.list.scroll_to_reveal_item(n.saturating_sub(1));
                 cx.notify()
             }))
-            .on_mouse_down(MouseButton::Left, cx.listener(|v, _, window, _| window.focus(&v.focus)))
+            .on_mouse_down(MouseButton::Left, cx.listener(|v, _, window, cx| window.focus(&v.focus, cx)))
             .children(notice.map(|n| {
                 div()
                     .px_4()
@@ -845,5 +981,71 @@ mod tests {
         assert_eq!(rows[0][1].text, "2");
         assert!(rows[0][1].runs[0].1.italic);
         assert_eq!(blocks[0].offset, 0);
+    }
+
+    fn pieces(blocks: &[Block]) -> Vec<Piece> {
+        blocks.iter().map(|b| b.piece).collect()
+    }
+
+    #[test]
+    fn long_paragraph_is_split_at_spaces() {
+        // Pretty-printed JSON is one paragraph for Markdown.
+        let line = "  \"name\": \"Müller\", \"städte\": [\"Köln\", \"Löhne\"],";
+        let src = format!("{{\n{}\n}}\n", vec![line; 2000].join("\n"));
+        let blocks = parse_blocks(&src);
+        assert!(blocks.len() > 2);
+        assert_eq!(pieces(&blocks)[0], Piece::First);
+        assert_eq!(*pieces(&blocks).last().unwrap(), Piece::Last);
+        assert!(pieces(&blocks)[1..blocks.len() - 1].iter().all(|p| *p == Piece::Middle));
+        // Nothing is lost: the pieces joined by the spaces they were split at.
+        let joined = blocks.iter().map(para_text).collect::<Vec<_>>().join(" ");
+        let whole = convert(&src);
+        assert_eq!(joined, para_text(&whole[0]));
+        for b in &blocks {
+            let BlockKind::Paragraph(i) = &b.kind else { panic!() };
+            assert!(i.text.len() < PIECE + 100);
+            assert_eq!(i.runs.iter().map(|r| r.0).sum::<usize>(), i.text.len());
+        }
+    }
+
+    #[test]
+    fn links_stay_whole() {
+        let src = vec!["[a link with several words](https://example.com) and text"; 600].join(" ");
+        let blocks = parse_blocks(&src);
+        assert!(blocks.len() > 1);
+        for b in &blocks {
+            let BlockKind::Paragraph(i) = &b.kind else { panic!() };
+            for (r, _) in &i.links {
+                assert_eq!(&i.text[r.clone()], "a link with several words");
+            }
+        }
+        let links: usize = blocks.iter().map(|b| if let BlockKind::Paragraph(i) = &b.kind { i.links.len() } else { 0 }).sum();
+        assert_eq!(links, 600);
+    }
+
+    #[test]
+    fn long_code_block_is_split_at_lines() {
+        let body = (0..3000).map(|i| format!("let ä{i} = \"ö\";")).collect::<Vec<_>>().join("\n");
+        let blocks = parse_blocks(&format!("```rust\n{body}\n```\n"));
+        assert!(blocks.len() > 2);
+        let texts: Vec<&str> = blocks
+            .iter()
+            .map(|b| match &b.kind {
+                BlockKind::Code { lang, text } => {
+                    assert_eq!(lang, "rust");
+                    text.as_str()
+                }
+                _ => panic!(),
+            })
+            .collect();
+        assert_eq!(texts.join("\n"), body);
+        assert_eq!(pieces(&blocks)[0], Piece::First);
+        assert_eq!(*pieces(&blocks).last().unwrap(), Piece::Last);
+    }
+
+    #[test]
+    fn short_blocks_stay_whole() {
+        let blocks = parse_blocks("# Title\n\nSome text.\n\n```\ncode\n```\n");
+        assert!(pieces(&blocks).iter().all(|p| *p == Piece::Whole));
     }
 }

@@ -18,14 +18,6 @@ msgstr " Neu laden verwirft deine ungespeicherten Änderungen."
 msgid "About rustpad++"
 msgstr "Über rustpad++"
 
-#: src/settings_window.rs:15 src/settings_window.rs:384
-msgid "Advanced"
-msgstr "Erweitert"
-
-#: src/settings_window.rs:384
-msgid "Advanced options (encoding, line endings, indexing) will follow."
-msgstr "Erweiterte Optionen (Encoding, Zeilenenden, Indexierung) folgen."
-
 #: src/menu.rs:175
 msgid "All Settings…"
 msgstr "Alle Einstellungen…"
@@ -242,12 +234,16 @@ msgid "Large document: only the first 16 MiB are rendered."
 msgstr "Großes Dokument: nur die ersten 16 MiB werden gerendert."
 
 #: src/workspace.rs:1419
-msgid "Less editor. More text."
-msgstr "Weniger Editor. Mehr Text."
+msgid "Less editor. More text. Fast."
+msgstr "Weniger Editor. Mehr Text. Schnell."
 
 #: src/theme.rs:189
 msgid "Light"
 msgstr "Hell"
+
+#: src/menu.rs:175
+msgid "Line Endings"
+msgstr "Zeilenenden"
 
 #: src/settings_window.rs:265
 msgid "Line numbers"
@@ -257,6 +253,10 @@ msgstr "Zeilennummern"
 msgid "Line {line} not indexed yet ({pct}% scanned) - try 0x<offset> or <n>%"
 msgstr "Zeile {line} ist noch nicht indexiert ({pct}% durchsucht) - versuche 0x<Offset> oder <n>%"
 
+#: src/menu.rs:135 src/workspace.rs:1401
+msgid "Linux, macOS (LF)"
+msgstr "Linux, macOS (LF)"
+
 #: src/workspace.rs:1056
 msgid "Ln {line}, Col {column}"
 msgstr "Z {line}, Sp {column}"
@@ -264,6 +264,10 @@ msgstr "Z {line}, Sp {column}"
 #: src/menu.rs:164 src/workspace.rs:1436
 msgid "Markdown"
 msgstr "Markdown"
+
+#: src/workspace.rs:1201
+msgid "Match case"
+msgstr "Groß/klein"
 
 #: src/menu.rs:124
 msgid "New File"
@@ -361,8 +365,8 @@ msgid "Restore session"
 msgstr "Sitzung wiederherstellen"
 
 #: src/workspace.rs:1443
-msgid "Rust and GPUI"
-msgstr "Rust und GPUI"
+msgid "Rust and GPUI Community Edition"
+msgstr "Rust und GPUI Community Edition"
 
 #: src/menu.rs:128 src/workspace.rs:549
 msgid "Save"
@@ -394,7 +398,7 @@ msgstr "Speichern"
 
 #: src/workspace.rs:884
 msgid "Search wrapped around"
-msgstr "Suche am Anfang fortgesetzt"
+msgstr "Suche am Dateiende umgebrochen"
 
 #: src/workspace.rs:893
 msgid "Searching"
@@ -465,6 +469,10 @@ msgstr "Ansicht"
 #: src/settings_window.rs:321
 msgid "Window"
 msgstr "Fenster"
+
+#: src/menu.rs:135 src/workspace.rs:1400
+msgid "Windows (CRLF)"
+msgstr "Windows (CRLF)"
 
 #: src/views/json.rs:935
 msgid "document "
@@ -675,6 +683,10 @@ msgstr "Konvertieren nach {encoding} nicht möglich: „{char}“ gibt es dort n
 msgid "Will be saved as {encoding}"
 msgstr "Wird als {encoding} gespeichert"
 
+#: src/workspace.rs:1579
+msgid "Will be saved with {line_endings} line endings"
+msgstr "Wird mit {line_endings}-Zeilenenden gespeichert"
+
 msgid "{encoding} with BOM"
 msgstr "{encoding} mit BOM"
 
@@ -740,6 +752,10 @@ msgstr "Version {version} ist verfügbar."
 
 msgid "What's new?"
 msgstr "Was ist neu?"
+
+#: src/workspace.rs:1202
+msgid "Whole word"
+msgstr "Ganzes Wort"
 
 msgid "rustpad++ is up to date."
 msgstr "rustpad++ ist auf dem neuesten Stand."

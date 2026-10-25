@@ -2,6 +2,35 @@
 
 What changed in each version of rustpad++. The newest version is at the top.
 
+## Unreleased
+
+- New color scheme Aurora (Settings → Appearance): graded dark surfaces,
+  syntax colors in violet, indigo and teal, and an About dialog lit from
+  below.
+- A refreshed look in every color scheme: buttons, tabs and switches are
+  rounded pills, menus and dropdowns are translucent panels, dialogs have
+  rounder corners. The interface uses the Inter font where it is installed.
+- The logo in the About dialog is sharp at every display scale.
+- rustpad++ now also speaks Spanish, French, Italian and Brazilian
+  Portuguese. These translations are drafts; corrections from native
+  speakers are welcome.
+- Find and replace can match case and whole words only (the two switches in
+  the find bar). Ignoring case also works for umlauts and other letters
+  beyond ASCII, in files of any size.
+- Line endings can be converted: Edit → Line Endings, or click "LF"/"CRLF"
+  in the status bar. Saving then writes only that kind, which also evens out
+  files with mixed line endings.
+- Many tabs no longer get cut off: the tab bar scrolls (also with the mouse
+  wheel), the active tab is always shown, and a list at its end shows all
+  tabs when they do not fit.
+- The settings no longer have an empty "Advanced" tab.
+- Very long paragraphs and code blocks in the Markdown view, such as a large
+  JSON file shown as Markdown, open and scroll without delay.
+- The update check uses a newer TLS library that fixes several security
+  issues (RUSTSEC-2026-0346 to -0349, -0381, -0382).
+- rustpad++ is now built on GPUI Community Edition, the maintained community
+  fork of GPUI.
+
 ## 0.3.0 - 2026-10-21
 
 - CSV and TSV files can be shown as a table (View > Table, Ctrl+5); they still

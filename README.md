@@ -8,7 +8,7 @@
 
 **Opens files of any size instantly: as text, hex, JSON tree, Markdown or table.**
 
-*Less editor. More text.*
+*Less editor. More text. Fast.*
 
 ### Install on Debian, Ubuntu or Linux Mint
 
@@ -25,7 +25,7 @@ make it executable and start it.
 [![Build](https://github.com/srcmkr/rustpad-plusplus/actions/workflows/build.yml/badge.svg)](https://github.com/srcmkr/rustpad-plusplus/actions/workflows/build.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
-<img src="docs/screenshots/json-tree.png" width="820" alt="rustpad++ showing a 2.7 MiB JSON file as a tree in the dark theme">
+<img src="docs/screenshots/json-tree.png" width="820" alt="rustpad++ showing a 3 MiB JSON file as a tree in the Aurora theme">
 
 </div>
 
@@ -38,9 +38,9 @@ make it executable and start it.
 - **Five views of the same file**: text, hex, a JSON tree that reads huge
   documents lazily, rendered Markdown and a sortable table for CSV.
   <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>5</kbd> switch, <kbd>Ctrl</kbd>+<kbd>E</kbd> cycles.
-- **Editing without surprises**: find and replace (replace all is a single undo
-  step), go to a line, a byte offset or a percentage, word wrap, duplicate and
-  delete lines.
+- **Editing without surprises**: find and replace, optionally matching case
+  and whole words (replace all is a single undo step), go to a line, a byte
+  offset or a percentage, word wrap, duplicate and delete lines.
 - **Never lose work**: on quit, all tabs come back including unsaved changes,
   without asking. Changes are backed up every second, so even after a crash
   only the last moments are missing; for large files only the changes are
@@ -48,9 +48,10 @@ make it executable and start it.
 - **Keeps an eye on your files**: a growing log can be followed like
   `tail -f`; files changed, replaced, truncated or deleted by other programs
   are noticed and you decide what happens.
-- **Encodings**: UTF-8 with or without BOM, UTF-16, Windows-1252,
-  ISO-8859-1 and -15 are detected; reopen a file in another encoding or convert
-  it from the status bar.
+- **Encodings and line endings**: UTF-8 with or without BOM, UTF-16,
+  Windows-1252, ISO-8859-1 and -15 are detected; reopen a file in another
+  encoding, or convert its encoding or line endings (LF, CRLF) from the
+  status bar.
 - **One window**: opening more files from the file manager or the command line
   adds tabs to the running window within milliseconds.
 
@@ -100,9 +101,12 @@ Word wrap and following the end of a file are in the *View* menu; the
 encoding is changed by clicking it in the status bar. Settings live in
 `~/.config/rustpad/settings.conf`, the session in `~/.local/state/rustpad`.
 
-rustpad++ speaks English and German and follows the system language; it can
-also be set under *Settings → General*. Color schemes: Dark, Light, Monokai and
-Solarized Dark.
+rustpad++ speaks English, German, Spanish, French, Italian and Brazilian
+Portuguese and follows the system language; it can also be set under
+*Settings → General*. The Spanish, French, Italian and Portuguese
+translations are new and not yet reviewed by native speakers: corrections
+are very welcome (see [CONTRIBUTING.md](CONTRIBUTING.md#translations)). Color schemes: Dark, Light, Monokai,
+Solarized Dark and Aurora.
 
 ## How this project is built
 
@@ -142,8 +146,9 @@ code and how releases are made.
 rustpad++ exists because of **[Notepad++](https://notepad-plus-plus.org/)** by
 **Don Ho**, more than twenty years of a great example. It is an independent
 project, not affiliated with or endorsed by the Notepad++ project. Built with
-[GPUI](https://www.gpui.rs/), the UI framework of the [Zed](https://zed.dev/)
-editor.
+[GPUI Community Edition](https://github.com/gpui-ce/gpui-ce), the community
+fork of [GPUI](https://www.gpui.rs/), the UI framework of the
+[Zed](https://zed.dev/) editor.
 
 ## License
 

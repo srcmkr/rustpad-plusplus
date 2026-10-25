@@ -5,7 +5,7 @@ use gpui::{
     App, Bounds, ClipboardItem, Context, Element, ElementId, Entity, EventEmitter, FocusHandle,
     Focusable, GlobalElementId, Hsla, InspectorElementId, IntoElement, LayoutId, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, Render, ScrollDelta,
-    ScrollWheelEvent, ShapedLine, SharedString, Style, TextRun, Window, div, fill, point,
+    ScrollWheelEvent, ShapedLine, SharedString, Style, TextRun, Window, div, point,
     prelude::*, px, relative, size,
 };
 
@@ -164,7 +164,7 @@ impl HexView {
     }
 
     fn on_mouse_down(&mut self, e: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         if let Some(l) = &self.layout
             && let Some(track) = l.track
             && track.contains(&e.position)
@@ -296,7 +296,7 @@ impl IntoElement for HexElement {
 }
 
 fn run(len: usize, font: &gpui::Font, color: Hsla) -> TextRun {
-    TextRun { len, font: font.clone(), color, background_color: None, underline: None, strikethrough: None }
+    TextRun { len, font: font.clone(), color, background_color: None, underline: None, strikethrough: None, letter_spacing: None }
 }
 
 impl Element for HexElement {
@@ -332,7 +332,7 @@ impl Element for HexElement {
         let fs = s.font_size;
         let lh = s.line_height();
         let ts = window.text_system().clone();
-        let char_w = ts.shape_line("0".into(), fs, &[run(1, &font, theme::text())], None).width;
+        let char_w = ts.shape_line("0".into(), fs, &[run(1, &font, theme::text())]).width;
 
         let view = self.view.read(cx);
         let buffer = view.buffer.read(cx);
@@ -395,13 +395,13 @@ impl Element for HexElement {
                 if o >= sel.start && o < sel.end {
                     let color = if o == view.cursor && focused { theme::accent() } else { theme::selection() };
                     let hx = left + char_w * hex_col(offset_cols, i) as f32;
-                    quads.push(fill(Bounds::new(point(hx, y), size(char_w * 2., lh)), color));
+                    quads.push(PaintQuad::new(Bounds::new(point(hx, y), size(char_w * 2., lh))).background(color));
                     let ax = left + char_w * ascii_col(offset_cols, i) as f32;
-                    quads.push(fill(Bounds::new(point(ax, y), size(char_w, lh)), color));
+                    quads.push(PaintQuad::new(Bounds::new(point(ax, y), size(char_w, lh))).background(color));
                 }
             }
 
-            let shaped = ts.shape_line(SharedString::from(text), fs, &runs, None);
+            let shaped = ts.shape_line(SharedString::from(text), fs, &runs);
             lines.push((y, shaped));
         }
 
@@ -438,18 +438,18 @@ impl Element for HexElement {
         window: &mut Window,
         cx: &mut App,
     ) {
-        window.paint_quad(fill(bounds, theme::bg()));
+        window.paint_quad(PaintQuad::new(bounds).background(theme::bg()));
         let lh = Settings::get(cx).line_height();
         let char_w = self.view.read(cx).layout.as_ref().map(|l| l.char_w).unwrap_or(px(8.));
-        window.with_content_mask(Some(gpui::ContentMask { bounds }), |window| {
+        window.with_content_mask(Some(gpui::ContentMask { bounds, fade_out: Default::default() }), |window| {
             for q in pp.quads.drain(..) {
                 window.paint_quad(q);
             }
             for (y, line) in &pp.lines {
-                line.paint(point(bounds.left() + char_w * 0.5, *y), lh, window, cx).ok();
+                line.paint(point(bounds.left() + char_w * 0.5, *y), lh, gpui::TextAlign::Left, None, window, cx).ok();
             }
             if let Some(t) = pp.thumb {
-                window.paint_quad(fill(t, theme::scrollbar_thumb()).corner_radii(px(3.)));
+                window.paint_quad(PaintQuad::new(t).background(theme::scrollbar_thumb()).corner_radii(px(3.)));
             }
         });
     }

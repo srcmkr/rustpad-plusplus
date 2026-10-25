@@ -81,9 +81,7 @@ pub fn init(cx: &mut App) {
         loop {
             cx.background_executor().timer(wait).await;
             wait = EVERY;
-            if cx.update(|cx| Settings::get(cx).check_updates.then(|| check(cx))).is_err() {
-                break;
-            }
+            cx.update(|cx| Settings::get(cx).check_updates.then(|| check(cx)));
         }
     })
     .detach();
@@ -127,8 +125,7 @@ pub fn check(cx: &mut App) {
                 updates.latest = latest;
             }
             cx.refresh_windows();
-        })
-        .ok();
+        });
     })
     .detach();
 }
@@ -173,7 +170,7 @@ pub fn status(cx: &App) -> (String, Hsla) {
     match newer(cx) {
         Some(release) => (tr!("Version {version} is available.", version = release.version), theme::error()),
         None if state.checking => (tr!("Checking…").to_string(), theme::text_faint()),
-        None if state.latest.is_some() => (tr!("rustpad++ is up to date.").to_string(), gpui::rgb(0x3fb950).into()),
+        None if state.latest.is_some() => (tr!("rustpad++ is up to date.").to_string(), gpui::rgb_to_hsla(gpui::rgb(0x3fb950))),
         None if state.failed => (tr!("Could not check for updates.").to_string(), theme::text_faint()),
         None if !Settings::get(cx).check_updates => (tr!("Not checked: the check is switched off.").to_string(), theme::text_faint()),
         None => (tr!("Checks shortly after the start.").to_string(), theme::text_faint()),
@@ -224,8 +221,7 @@ pub fn install(action: Action, cx: &mut App) {
                 other => updates.outcome = Some(other),
             }
             cx.refresh_windows();
-        })
-        .ok();
+        });
     })
     .detach();
 }

@@ -50,18 +50,8 @@ impl Render for ThemedPrompt {
         };
         // Cancel on the left, the default action on the right.
         let buttons = self.actions.iter().enumerate().rev().map(|(i, label)| {
-            let primary = i == 0;
-            div()
-                .id(("prompt-action", i))
-                .px_4()
-                .py_1()
-                .rounded_md()
-                .border_1()
-                .cursor_pointer()
-                .when(primary, |d| d.bg(theme::accent()).border_color(theme::accent()).text_color(theme::on_accent()))
-                .when(!primary, |d| d.bg(theme::bg_alt()).border_color(theme::border()).hover(|s| s.bg(theme::bg_hover())))
+            crate::ui::button(("prompt-action", i), label.clone(), i == 0)
                 .on_click(cx.listener(move |_, _, _, cx| cx.emit(PromptResponse(i))))
-                .child(label.clone())
         });
         div()
             .size_full()
@@ -69,11 +59,11 @@ impl Render for ThemedPrompt {
             .items_center()
             .justify_center()
             .bg(theme::shadow())
-            .font_family("DejaVu Sans")
+            .font_family(crate::ui::font())
             .text_size(px(13.))
             .text_color(theme::text())
             .child(
-                div()
+                crate::ui::dialog()
                     .id("prompt")
                     .track_focus(&self.focus)
                     .on_key_down(cx.listener(move |_, e: &KeyDownEvent, _, cx| match e.keystroke.key.as_str() {
@@ -87,11 +77,6 @@ impl Render for ThemedPrompt {
                     .flex_col()
                     .gap_4()
                     .p_5()
-                    .bg(theme::bg_panel())
-                    .border_1()
-                    .border_color(theme::border())
-                    .rounded_lg()
-                    .shadow_lg()
                     .child(
                         div()
                             .flex()
@@ -105,7 +90,7 @@ impl Render for ThemedPrompt {
                                     .flex_1()
                                     .min_w_0()
                                     .gap_1()
-                                    .child(div().text_size(px(15.)).font_weight(gpui::FontWeight::SEMIBOLD).child(self.message.clone()))
+                                    .child(div().text_size(px(15.)).font_weight(gpui::FontWeight::MEDIUM).child(self.message.clone()))
                                     .children(self.detail.clone().map(|d| div().text_color(theme::text_dim()).child(d))),
                             ),
                     )

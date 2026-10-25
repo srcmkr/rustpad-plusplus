@@ -9,10 +9,11 @@ use gpui::{
 
 use crate::doc::rows;
 use crate::theme::{self, DEFAULT_FONT_SIZE, SCHEMES, Settings};
+use crate::ui;
 use crate::workspace::{CloseOverlay, CloseTab};
 
-fn tabs() -> [&'static str; 5] {
-    [tr!("General"), tr!("Editor"), tr!("Appearance"), tr!("File Types"), tr!("Advanced")]
+fn tabs() -> [&'static str; 4] {
+    [tr!("General"), tr!("Editor"), tr!("Appearance"), tr!("File Types")]
 }
 const FONT_CANDIDATES: [&str; 7] = [
     "DejaVu Sans Mono",
@@ -32,7 +33,7 @@ impl Global for OpenSettings {}
 /// Open the settings window as a dialog of the focused main window.
 pub fn open(cx: &mut App) {
     if let Some(handle) = cx.try_global::<OpenSettings>().map(|o| o.0)
-        && handle.update(cx, |_, window, _| window.activate_window()).is_ok()
+        && handle.update(cx, |_, window, _| window.activate()).is_ok()
     {
         return;
     }
@@ -56,7 +57,7 @@ pub fn open(cx: &mut App) {
             window.set_window_title(tr!("Settings - rustpad++"));
             cx.new(|cx| {
                 let focus = cx.focus_handle();
-                window.focus(&focus);
+                window.focus(&focus, cx);
                 let installed = cx.text_system().all_font_names();
                 let fonts = FONT_CANDIDATES
                     .iter()
@@ -103,7 +104,7 @@ fn section(title: &'static str) -> gpui::Div {
         .flex()
         .flex_col()
         .gap_3()
-        .child(div().text_size(px(12.)).text_color(theme::text_dim()).child(title.to_uppercase()))
+        .child(div().text_size(px(13.)).font_weight(gpui::FontWeight::MEDIUM).text_color(theme::text_dim()).child(title))
 }
 
 fn row(label: &'static str, hint: Option<&'static str>, control: impl IntoElement) -> gpui::Div {
@@ -136,22 +137,14 @@ fn switch(id: impl Into<gpui::ElementId>, on: bool) -> gpui::Stateful<gpui::Div>
         .rounded_full()
         .p(px(3.))
         .flex()
+        .cursor_pointer()
         .when(on, |d| d.bg(theme::accent()).justify_end())
-        .when(!on, |d| d.bg(theme::bg_active()).justify_start())
+        .when(!on, |d| d.bg(theme::control_active()).justify_start())
         .child(div().size(px(16.)).rounded_full().bg(rgb(0xffffff)))
 }
 
 fn button(id: impl Into<gpui::ElementId>, label: impl Into<SharedString>) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .px_3()
-        .py_1()
-        .rounded_sm()
-        .border_1()
-        .border_color(theme::border())
-        .bg(theme::bg_alt())
-        .hover(|s| s.bg(theme::bg_hover()))
-        .child(label.into())
+    ui::button(id, label, false)
 }
 
 impl SettingsWindow {
@@ -244,18 +237,29 @@ impl SettingsWindow {
         cx: &mut Context<Self>,
         set: fn(&mut Window, &mut App, T),
     ) -> impl IntoElement {
-        let mut seg = div().flex().flex_row().rounded_sm().border_1().border_color(theme::border()).overflow_hidden();
+        let mut seg = div()
+            .flex()
+            .flex_row()
+            .p(px(2.))
+            .gap(px(2.))
+            .rounded_full()
+            .bg(theme::control())
+            .border_1()
+            .border_color(theme::glass_border());
         for (i, (label, value)) in options.into_iter().enumerate() {
             let active = value == current;
             let value = value.clone();
             seg = seg.child(
                 div()
                     .id((id, i))
+                    .h(px(ui::PILL_H - 4.))
+                    .flex()
+                    .items_center()
                     .px_3()
-                    .py_1()
-                    .when(i > 0, |d| d.border_l_1().border_color(theme::border()))
-                    .when(active, |d| d.bg(theme::accent()).text_color(theme::on_accent()))
-                    .when(!active, |d| d.bg(theme::bg_alt()).hover(|s| s.bg(theme::bg_hover())))
+                    .rounded_full()
+                    .cursor_pointer()
+                    .when(active, |d| d.bg(theme::control_active()).text_color(theme::text()))
+                    .when(!active, |d| d.text_color(theme::text_dim()).hover(|s| s.bg(theme::control_hover())))
                     .on_click(cx.listener(move |_, _, window, cx| set(window, cx, value.clone())))
                     .child(label),
             );
@@ -282,48 +286,38 @@ impl SettingsWindow {
             .justify_between()
             .gap_3()
             .min_w(px(220.))
-            .px_3()
-            .py_1()
-            .rounded_sm()
+            .h(px(ui::PILL_H))
+            .px_4()
+            .rounded_full()
+            .cursor_pointer()
             .border_1()
-            .border_color(if open { theme::accent() } else { theme::border() })
-            .bg(theme::bg_alt())
-            .hover(|s| s.bg(theme::bg_hover()))
+            .border_color(if open { theme::accent() } else { theme::glass_border() })
+            .bg(theme::control())
+            .hover(|s| s.bg(theme::control_hover()))
             .on_click(cx.listener(move |v, _, _, cx| {
                 v.open_dropdown = if v.open_dropdown == Some(id) { None } else { Some(id) };
                 cx.notify();
             }))
             .child(label)
             .child(div().text_color(theme::text_dim()).child("▾"));
-        let mut list = div()
+        let mut list = ui::popover()
             .id((id, usize::MAX))
             .occlude()
             .absolute()
-            .top(px(32.))
+            .top(px(ui::PILL_H + 4.))
             .left_0()
             .min_w(px(220.))
-            .py_1()
             .flex()
-            .flex_col()
-            .bg(theme::bg_panel())
-            .border_1()
-            .border_color(theme::border())
-            .rounded_md()
-            .shadow_lg();
+            .flex_col();
         if open {
             for (i, (label, value)) in options.into_iter().enumerate() {
                 let active = value == current;
                 list = list.child(
-                    div()
+                    ui::row()
                         .id((id, i))
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .mx_1()
+                        .h(px(28.))
                         .px_2()
-                        .py_1()
-                        .rounded_sm()
-                        .hover(|s| s.bg(theme::bg_hover()))
+                        .hover(|s| s.bg(theme::control_hover()))
                         .on_click(cx.listener(move |v, _, window, cx| {
                             v.open_dropdown = None;
                             set(window, cx, value.clone());
@@ -335,7 +329,7 @@ impl SettingsWindow {
             }
         }
         // Above the backdrop that the window adds while a dropdown is open.
-        div().relative().child(trigger).when(open, |d| d.child(deferred(list).with_priority(2)))
+        div().relative().child(trigger).when(open, |d| d.child(deferred(list).priority(2)))
     }
 
     fn general(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -529,8 +523,9 @@ impl SettingsWindow {
             cards = cards.child(
                 div()
                     .id(("scheme", i))
-                    .w(px(140.))
-                    .rounded_md()
+                    .w(px(114.))
+                    .cursor_pointer()
+                    .rounded(px(ui::R_POPOVER))
                     .border_2()
                     .border_color(if active { theme::accent() } else { theme::border() })
                     .overflow_hidden()
@@ -541,23 +536,27 @@ impl SettingsWindow {
                     .child(
                         div()
                             .h(px(56.))
+                            // Inside the 2 px border.
+                            .rounded_t(px(ui::R_POPOVER - 2.))
                             .bg(rgb(sch_bg(sch)))
                             .p_2()
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .child(div().h(px(6.)).w(px(70.)).rounded_sm().bg(rgb(sch_color(sch, 0))))
-                            .child(div().h(px(6.)).w(px(100.)).rounded_sm().bg(rgb(sch_color(sch, 1))))
-                            .child(div().h(px(6.)).w(px(50.)).rounded_sm().bg(rgb(sch_color(sch, 2)))),
+                            .child(div().h(px(6.)).w(px(70.)).rounded_full().bg(rgb(sch_color(sch, 0))))
+                            .child(div().h(px(6.)).w(px(88.)).rounded_full().bg(rgb(sch_color(sch, 1))))
+                            .child(div().h(px(6.)).w(px(50.)).rounded_full().bg(rgb(sch_color(sch, 2)))),
                     )
                     .child(
                         div()
                             .px_2()
                             .py_1()
+                            .rounded_b(px(ui::R_POPOVER - 2.))
                             .bg(theme::bg_alt())
                             .flex()
                             .flex_row()
                             .justify_between()
+                            .whitespace_nowrap()
                             .child(crate::i18n::tr(sch.name))
                             .child(if active { "✓" } else { "" }),
                     ),
@@ -573,20 +572,6 @@ impl SettingsWindow {
                 None,
                 self.toggle("status", status, cx, |s| s.status_bar = !s.status_bar),
             )))
-    }
-
-    fn stub(&self, title: &'static str, text: &'static str) -> impl IntoElement {
-        div()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap_2()
-            .size_full()
-            .text_color(theme::text_dim())
-            .child(div().text_size(px(32.)).child("🚧"))
-            .child(div().text_color(theme::text()).child(title))
-            .child(div().text_size(px(12.)).child(text))
     }
 }
 
@@ -630,8 +615,7 @@ impl Render for SettingsWindow {
             0 => self.general(cx).into_any_element(),
             1 => self.editor(cx).into_any_element(),
             2 => self.appearance(cx).into_any_element(),
-            3 => self.file_types(cx).into_any_element(),
-            _ => self.stub(tr!("Advanced"), tr!("Advanced options (encoding, line endings, indexing) will follow.")).into_any_element(),
+            _ => self.file_types(cx).into_any_element(),
         };
         div()
             .id("settings")
@@ -649,7 +633,7 @@ impl Render for SettingsWindow {
             .bg(theme::bg())
             .text_color(theme::text())
             .text_size(px(13.))
-            .font_family("DejaVu Sans")
+            .font_family(crate::ui::font())
             .child(nav)
             .child(div().id("settings-body").flex_1().overflow_y_scroll().p_6().child(body))
             // Clicks anywhere outside an open dropdown close it.
@@ -668,7 +652,7 @@ impl Render for SettingsWindow {
                                 cx.notify();
                             })),
                     )
-                    .with_priority(1),
+                    .priority(1),
                 )
             })
     }

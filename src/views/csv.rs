@@ -300,7 +300,7 @@ impl CsvView {
     }
 
     fn on_row_down(&mut self, row: usize, e: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         self.selected = row;
         if e.click_count == 2 {
             self.activate(row, cx);
@@ -381,8 +381,8 @@ impl Render for CsvView {
         let font = s.mono();
         let font_size = s.font_size;
         let lh = s.line_height();
-        let run = TextRun { len: 1, font: font.clone(), color: theme::text(), background_color: None, underline: None, strikethrough: None };
-        let char_w = window.text_system().shape_line("0".into(), font_size, &[run], None).width;
+        let run = TextRun { len: 1, font: font.clone(), color: theme::text(), background_color: None, underline: None, strikethrough: None, letter_spacing: None };
+        let char_w = window.text_system().shape_line("0".into(), font_size, &[run]).width;
         self.char_w = char_w;
         let table = self.table.clone();
         let cols: Rc<Vec<Pixels>> = Rc::new((0..table.widths.len()).map(|c| char_w * self.col_chars(c)).collect());
@@ -425,7 +425,7 @@ impl Render for CsvView {
                     .cursor_pointer()
                     .hover(|s| s.bg(theme::bg_hover()))
                     .on_mouse_down(MouseButton::Left, cx.listener(move |v, _, w, cx| {
-                        w.focus(&v.focus);
+                        w.focus(&v.focus, cx);
                         v.cycle_sort(c, cx);
                     }))
                     .child(format!("{name}{arrow}"))
@@ -490,7 +490,7 @@ impl Render for CsvView {
             } else {
                 uniform_list("csv-rows", self.order.len(), cx.processor(move |v, range, _, cx| v.render_rows(range, &cols, num_w, cx)))
                     .with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::Unconstrained)
-                    .track_scroll(self.scroll.clone())
+                    .track_scroll(&self.scroll)
                     .flex_1()
                     .into_any_element()
             })

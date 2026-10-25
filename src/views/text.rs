@@ -7,11 +7,12 @@
 use std::ops::Range;
 
 use gpui::{
-    App, Bounds, ClipboardItem, Context, CursorStyle, Element, ElementId, ElementInputHandler,
-    Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable, GlobalElementId, Hsla,
+    App, Bounds, CaretPosition, ClipboardItem, Context, CursorStyle, Element, ElementId,
+    ElementInputHandler, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable,
+    GlobalElementId, Hsla,
     InspectorElementId, IntoElement, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent,
     MouseUpEvent, PaintQuad, Pixels, Point, Render, ScrollDelta, ScrollWheelEvent, ShapedLine,
-    SharedString, Style, Styled, TextRun, UTF16Selection, Window, actions, div, fill, point,
+    SharedString, Style, Styled, TextRun, UTF16Selection, Window, actions, div, point,
     prelude::*, px, relative, size,
 };
 
@@ -626,11 +627,11 @@ impl TextView {
         cx.emit(TextEvent::Edited);
     }
 
-    /// Replace all `needle_len`-byte matches at `hits` with `text` (one undo step).
-    pub fn replace_all(&mut self, hits: &[u64], needle_len: u64, text: &str, cx: &mut Context<Self>) {
+    /// Replace all matches in `hits` with `text` (one undo step).
+    pub fn replace_all(&mut self, hits: &[Range<u64>], text: &str, cx: &mut Context<Self>) {
         let before = self.cursor;
         let pos = self.buffer.update(cx, |b, cx| {
-            let p = b.replace_all(hits, needle_len, text, before);
+            let p = b.replace_all(hits, text, before);
             cx.notify();
             p
         });
@@ -804,7 +805,7 @@ impl TextView {
     }
 
     fn on_mouse_down(&mut self, e: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         if let Some(l) = &self.layout
             && let Some(track) = l.track
                 && track.contains(&e.position)
@@ -1029,7 +1030,7 @@ struct TextElement {
 
 struct Prepaint {
     gutter_w: Pixels,
-    line_numbers: Vec<(Pixels, ShapedLine, bool)>,
+    line_numbers: Vec<(Pixels, Option<ShapedLine>, bool)>,
     selections: Vec<PaintQuad>,
     cursor: Option<PaintQuad>,
     current_line: Option<PaintQuad>,
@@ -1042,8 +1043,33 @@ impl IntoElement for TextElement {
     }
 }
 
+/// Caret and hit-test lookups on a shaped single-line row.
+trait LineExt {
+    /// Offset of the caret before byte `index`; past the end, the line width.
+    fn x_for_index(&self, index: usize) -> Pixels;
+    /// Byte index of the caret boundary nearest to `x`.
+    fn closest_index_for_x(&self, x: Pixels) -> usize;
+}
+
+impl LineExt for ShapedLine {
+    fn x_for_index(&self, index: usize) -> Pixels {
+        if index >= self.len() {
+            return self.width();
+        }
+        let caret = CaretPosition::attached_to_next_cluster(index);
+        self.platform_layout.caret_bounds(caret, self.ascent + self.descent).map_or(px(0.), |b| b.origin.x)
+    }
+
+    fn closest_index_for_x(&self, x: Pixels) -> usize {
+        let lh = self.ascent + self.descent;
+        match self.platform_layout.caret_from_pixel_point(point(x, lh * 0.5), lh) {
+            Ok(caret) | Err(caret) => caret.index.min(self.len()),
+        }
+    }
+}
+
 fn run(len: usize, font: &gpui::Font, color: Hsla) -> TextRun {
-    TextRun { len, font: font.clone(), color, background_color: None, underline: None, strikethrough: None }
+    TextRun { len, font: font.clone(), color, background_color: None, underline: None, strikethrough: None, letter_spacing: None }
 }
 
 impl Element for TextElement {
@@ -1093,7 +1119,7 @@ impl Element for TextElement {
         let len = buffer.len();
         let ts = window.text_system().clone();
 
-        let char_w = ts.shape_line("0".into(), font_size, &[run(1, &font, theme::text())], None).width;
+        let char_w = ts.shape_line("0".into(), font_size, &[run(1, &font, theme::text())]).width;
         let visible_rows = ((bounds.size.height / lh).floor() as usize).max(1);
 
         // Word wrap width from the space right of the gutter (sized like below;
@@ -1145,11 +1171,11 @@ impl Element for TextElement {
                         let label: SharedString = (ln + 1).to_string().into();
                         let active = s.start == cursor_line_start;
                         let color = if active { theme::gutter_active() } else { theme::gutter_text() };
-                        let shaped = ts.shape_line(label.clone(), font_size, &[run(label.len(), &font, color)], None);
+                        let shaped = ts.shape_line(label.clone(), font_size, &[run(label.len(), &font, color)]);
                         let x = w - char_w - shaped.width;
-                        line_numbers.push((x, shaped, active));
+                        line_numbers.push((x, Some(shaped), active));
                     } else {
-                        line_numbers.push((px(-1.), ShapedLine::default(), false));
+                        line_numbers.push((px(-1.), None, false));
                     }
                 }
             }
@@ -1163,7 +1189,7 @@ impl Element for TextElement {
         for (i, span) in spans.into_iter().enumerate() {
             let row = DisplayRow::build(buffer, span);
             let text: SharedString = row.text.clone().into();
-            let line = ts.shape_line(text, font_size, &[run(row.text.len(), &font, theme::text())], None);
+            let line = ts.shape_line(text, font_size, &[run(row.text.len(), &font, theme::text())]);
             painted.push(PaintedRow { row, line, y: bounds.top() + lh * i as f32 });
         }
 
@@ -1211,13 +1237,13 @@ impl Element for TextElement {
                 if range.end > s.end && s.next.is_some() && s.end < row_end {
                     b += char_w * 0.6; // the line break is selected
                 }
-                selections.push(fill(
-                    Bounds::from_corners(
+                selections.push(
+                    PaintQuad::new(Bounds::from_corners(
                         point(text_x - scroll_x + a, r.y),
                         point(text_x - scroll_x + b, r.y + lh),
-                    ),
-                    color,
-                ));
+                    ))
+                    .background(color),
+                );
             }
         };
         if let Some(h) = &view.highlight {
@@ -1230,13 +1256,13 @@ impl Element for TextElement {
         if let Some(r) = cursor_row {
             let x = text_x - scroll_x + r.line.x_for_index(r.row.disp_index(cursor));
             if focused {
-                cursor_quad = Some(fill(Bounds::new(point(x, r.y), size(px(2.), lh)), theme::cursor()));
+                cursor_quad = Some(PaintQuad::new(Bounds::new(point(x, r.y), size(px(2.), lh))).background(theme::cursor()));
             }
             if !single && sel.is_empty() {
-                current_line = Some(fill(
-                    Bounds::new(point(bounds.left(), r.y), size(bounds.size.width, lh)),
-                    theme::current_line(),
-                ));
+                current_line = Some(
+                    PaintQuad::new(Bounds::new(point(bounds.left(), r.y), size(bounds.size.width, lh)))
+                        .background(theme::current_line()),
+                );
             }
         }
 
@@ -1294,7 +1320,7 @@ impl Element for TextElement {
 
         let single = self.view.read(cx).single_line;
         if !single {
-            window.paint_quad(fill(bounds, theme::bg()));
+            window.paint_quad(PaintQuad::new(bounds).background(theme::bg()));
         }
         if let Some(q) = pp.current_line.take() {
             window.paint_quad(q);
@@ -1313,12 +1339,12 @@ impl Element for TextElement {
         );
         let rows: Vec<(Pixels, ShapedLine)> = layout.rows.iter().map(|r| (r.y, r.line.clone())).collect();
 
-        window.with_content_mask(Some(gpui::ContentMask { bounds: text_clip }), |window| {
+        window.with_content_mask(Some(gpui::ContentMask { bounds: text_clip, fade_out: Default::default() }), |window| {
             for q in pp.selections.drain(..) {
                 window.paint_quad(q);
             }
             for (y, line) in &rows {
-                line.paint(point(text_x - scroll_x, *y), lh, window, cx).ok();
+                line.paint(point(text_x - scroll_x, *y), lh, gpui::TextAlign::Left, None, window, cx).ok();
             }
             if let Some(c) = pp.cursor.take() {
                 window.paint_quad(c);
@@ -1327,13 +1353,13 @@ impl Element for TextElement {
 
         if !single {
             for ((x, line, _), (y, _)) in pp.line_numbers.iter().zip(rows.iter()) {
-                if *x >= px(0.) {
-                    line.paint(point(bounds.left() + *x, *y), lh, window, cx).ok();
+                if let Some(line) = line {
+                    line.paint(point(bounds.left() + *x, *y), lh, gpui::TextAlign::Left, None, window, cx).ok();
                 }
             }
             if let Some(t) = thumb {
                 let color = if dragging { theme::scrollbar_thumb_active() } else { theme::scrollbar_thumb() };
-                window.paint_quad(fill(t, color).corner_radii(px(3.)));
+                window.paint_quad(PaintQuad::new(t).background(color).corner_radii(px(3.)));
             }
         }
     }

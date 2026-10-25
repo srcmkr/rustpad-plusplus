@@ -1,27 +1,31 @@
 //! Window contents: tabs, view switcher, find/goto bar and status bar.
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use gpui::{
-    AnyElement, App, Context, DispatchPhase, Entity, ExternalPaths, FocusHandle, Focusable,
-    FontWeight, Image, ImageFormat, IntoElement, MouseButton, PathPromptOptions, PromptLevel, Render,
-    ScrollDelta, ScrollWheelEvent, SharedString, Subscription, Task, Window, actions, canvas,
-    deferred, div, img, linear_color_stop, linear_gradient, prelude::*, px, rgb,
+    AnyElement, App, Context, DevicePixels, DispatchPhase, Entity, ExternalPaths, FocusHandle,
+    Focusable, FontWeight, IntoElement, MouseButton, PathPromptOptions, PromptLevel, Render,
+    RenderImage, ScrollDelta, ScrollHandle, ScrollWheelEvent, SharedString, Subscription, SvgSize,
+    Task, Window, actions, canvas, deferred, div, img, linear_color_stop, linear_gradient, point,
+    prelude::*, px, rgb, rgba, size,
 };
 
 #[path = "menu.rs"]
 mod menu;
 
 use crate::doc::Buffer;
-use crate::doc::buffer::DiskChange;
+use crate::doc::buffer::{DiskChange, LineEnding};
 use crate::session;
 use crate::update;
 use crate::doc::detect::{self, Kind};
 use crate::doc::encoding::{self, Encoding};
 use crate::doc::rows;
+use crate::doc::search::{Query, Search};
 use crate::theme::{self, Settings};
+use crate::ui;
 use crate::views::csv::CsvView;
 use crate::views::hex::HexView;
 use crate::views::json::JsonView;
@@ -117,6 +121,20 @@ pub struct Workspace {
     submenu: Option<SharedString>,
     /// The encoding drop-up of the status bar is open.
     encoding_menu: bool,
+    /// The line ending drop-up of the status bar is open.
+    eol_menu: bool,
+    /// Find options, kept while the window is open.
+    match_case: bool,
+    whole_word: bool,
+    /// Horizontal scroll of the tab bar.
+    tab_scroll: ScrollHandle,
+    /// The tab last scrolled into view, so only a switch scrolls the bar.
+    tab_in_view: Option<usize>,
+    /// Whether the tabs did not fit at the last frame (the tab list button
+    /// then takes room from the bar).
+    tabs_overflow: bool,
+    /// The list of all tabs (when they do not fit) is open.
+    tab_list: bool,
     dialog: Option<Dialog>,
     save_queue: Vec<(Entity<Buffer>, PathBuf)>,
     tabs: Vec<Tab>,
@@ -143,6 +161,13 @@ impl Workspace {
             menu_by_hover: false,
             submenu: None,
             encoding_menu: false,
+            eol_menu: false,
+            match_case: false,
+            whole_word: false,
+            tab_scroll: ScrollHandle::new(),
+            tab_in_view: None,
+            tabs_overflow: false,
+            tab_list: false,
             dialog: None,
             save_queue: Vec::new(),
             tabs: Vec::new(),
@@ -369,7 +394,7 @@ impl Workspace {
             ViewMode::Markdown => t.md.as_ref().map(|v| v.focus_handle(cx)).unwrap_or(t.text.focus_handle(cx)),
             ViewMode::Table => t.table.as_ref().map(|v| v.focus_handle(cx)).unwrap_or(t.text.focus_handle(cx)),
         };
-        window.focus(&handle);
+        window.focus(&handle, cx);
     }
 
     fn jump_to_text(&mut self, offset: u64, window: &mut Window, cx: &mut Context<Self>) {
@@ -666,7 +691,7 @@ impl Workspace {
         );
         cx.spawn(async move |_, cx| {
             if let Ok(0) = rx.await {
-                cx.update(|cx| cx.quit()).ok();
+                cx.update(|cx| cx.quit());
             }
         })
         .detach();
@@ -741,7 +766,7 @@ impl Workspace {
             });
             (r, sub)
         });
-        window.focus(&input.focus_handle(cx));
+        window.focus(&input.focus_handle(cx), cx);
         input.update(cx, |v, cx| v.select_all_text(cx));
         self.bar = Some(Bar { kind, input, replace, _sub: sub });
         cx.notify();
@@ -752,7 +777,7 @@ impl Workspace {
         let Some(bar) = &self.bar else { return };
         let Some((replace, _)) = &bar.replace else { return };
         let next = if bar.input.focus_handle(cx).is_focused(window) { replace.clone() } else { bar.input.clone() };
-        window.focus(&next.focus_handle(cx));
+        window.focus(&next.focus_handle(cx), cx);
         next.update(cx, |v, cx| v.select_all_text(cx));
     }
 
@@ -772,13 +797,18 @@ impl Workspace {
         (!needle.is_empty()).then_some((needle, with))
     }
 
+    fn query(&self, text: String) -> Query {
+        Query { text, match_case: self.match_case, whole_word: self.whole_word }
+    }
+
     /// Replace the current match (if the selection is one) and find the next.
     fn replace_one(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((needle, with)) = self.search_terms(cx) else { return };
+        let Some(search) = Search::new(&self.query(needle)) else { return };
         if self.tab().mode == ViewMode::Text {
             let text = self.tab().text.clone();
             let sel = text.read(cx).selection();
-            if sel.end - sel.start == needle.len() as u64 && self.tab().buffer.read(cx).slice(sel).as_ref() == needle.as_bytes() {
+            if !sel.is_empty() && search.is_match(self.tab().buffer.read(cx), sel) {
                 text.update(cx, |v, cx| {
                     v.highlight = None;
                     v.insert(&with, cx);
@@ -791,6 +821,7 @@ impl Workspace {
     /// Replace every match in the document as one undo step.
     fn replace_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((needle, with)) = self.search_terms(cx) else { return };
+        let Some(search) = Search::new(&self.query(needle)) else { return };
         if let Some(j) = self.job.take() {
             j.cancel.store(true, Ordering::Relaxed);
         }
@@ -806,21 +837,14 @@ impl Workspace {
         let cancel = Arc::new(AtomicBool::new(false));
         let (p, c) = (progress.clone(), cancel.clone());
         let task = cx.spawn_in(window, async move |this, cx| {
-            let n = needle.into_bytes();
-            let nlen = n.len() as u64;
             let hits = cx
                 .background_executor()
                 .spawn(async move {
-                    let mut hits = Vec::new();
-                    let mut from = 0;
                     let tick = |pos: u64| {
                         p.store(pos, Ordering::Relaxed);
                         !c.load(Ordering::Relaxed)
                     };
-                    while let Some(h) = snapshot.find(&n, from, tick) {
-                        hits.push(h);
-                        from = h + nlen;
-                    }
+                    let hits = search.find_all(&snapshot, 0, tick);
                     (!c.load(Ordering::Relaxed)).then_some(hits)
                 })
                 .await;
@@ -832,7 +856,7 @@ impl Workspace {
                 } else if text.read(cx).buffer_version(cx) != version {
                     tr!("Document changed while searching - nothing replaced").to_string()
                 } else {
-                    text.update(cx, |v, cx| v.replace_all(&hits, nlen, &with, cx));
+                    text.update(cx, |v, cx| v.replace_all(&hits, &with, cx));
                     trn!("Replaced {n} occurrence", "Replaced {n} occurrences", hits.len())
                 };
                 ws.flash(msg.into(), cx);
@@ -910,9 +934,7 @@ impl Workspace {
                 return;
             }
         };
-        if needle.is_empty() {
-            return;
-        }
+        let Some(search) = Search::new(&self.query(needle)) else { return };
         if let Some(j) = self.job.take() {
             j.cancel.store(true, Ordering::Relaxed);
         }
@@ -929,8 +951,6 @@ impl Workspace {
         let cancel = Arc::new(AtomicBool::new(false));
         let (p, c) = (progress.clone(), cancel.clone());
         let task = cx.spawn_in(window, async move |this, cx| {
-            let n = needle.into_bytes();
-            let nlen = n.len() as u64;
             let (hit, wrapped) = cx
                 .background_executor()
                 .spawn(async move {
@@ -938,15 +958,15 @@ impl Workspace {
                         p.store(pos, Ordering::Relaxed);
                         !c.load(Ordering::Relaxed)
                     };
-                    let first = if forward { snapshot.find(&n, from, tick) } else { snapshot.rfind(&n, from, tick) };
+                    let first = if forward { search.find(&snapshot, from, tick) } else { search.rfind(&snapshot, from, tick) };
                     if first.is_some() || c.load(Ordering::Relaxed) {
                         return (first, false);
                     }
                     // Wrap around.
                     let again = if forward {
-                        snapshot.find(&n, 0, tick).filter(|&h| h < from)
+                        search.find(&snapshot, 0, tick).filter(|h| h.start < from)
                     } else {
-                        snapshot.rfind(&n, snapshot.len(), tick).filter(|&h| h >= from)
+                        search.rfind(&snapshot, snapshot.len(), tick).filter(|h| h.start >= from)
                     };
                     (again, true)
                 })
@@ -956,8 +976,8 @@ impl Workspace {
                 match hit {
                     Some(h) => {
                         text.update(cx, |v, cx| {
-                            v.highlight = Some(h..h + nlen);
-                            v.go_to(h..h + nlen, cx);
+                            v.highlight = Some(h.clone());
+                            v.go_to(h, cx);
                         });
                         if wrapped {
                             ws.flash(tr!("Search wrapped around").into(), cx);
@@ -981,10 +1001,26 @@ impl Workspace {
             .id("tab-strip")
             .flex()
             .flex_row()
+            .items_center()
+            .gap(px(2.))
+            .px_1()
             .flex_1()
             .h_full()
             .min_w_0()
-            .overflow_hidden()
+            .overflow_x_scroll()
+            .track_scroll(&self.tab_scroll)
+            // The wheel scrolls the tabs sideways.
+            .on_scroll_wheel(cx.listener(|ws, e: &ScrollWheelEvent, _, cx| {
+                let delta = match e.delta {
+                    ScrollDelta::Lines(p) => (p.y + p.x) * 20.,
+                    ScrollDelta::Pixels(p) => f32::from(p.y + p.x),
+                };
+                let (offset, max) = (ws.tab_scroll.offset(), ws.tab_scroll.max_offset());
+                let x = (f32::from(offset.x) + delta).clamp(-f32::from(max.x), 0.);
+                ws.tab_scroll.set_offset(point(px(x), offset.y));
+                cx.stop_propagation();
+                cx.notify();
+            }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|ws, e: &gpui::MouseDownEvent, window, cx| {
@@ -1004,13 +1040,14 @@ impl Workspace {
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap_2()
-                    .px_3()
-                    .h_full()
-                    .border_r_1()
-                    .border_color(theme::border())
-                    .when(active, |d| d.bg(theme::bg()).border_t_2().border_color(theme::accent()))
-                    .when(!active, |d| d.text_color(theme::text_dim()).hover(|s| s.bg(theme::bg_hover())))
+                    .flex_none()
+                    .gap_1()
+                    .pl_3()
+                    .pr_1()
+                    .h(px(ui::PILL_H - 2.))
+                    .rounded(px(ui::R_ROW))
+                    .when(active, |d| d.bg(theme::control_active()))
+                    .when(!active, |d| d.text_color(theme::text_dim()).hover(|s| s.bg(theme::control_hover())))
                     .on_mouse_down(MouseButton::Left, cx.listener(move |ws, _, window, cx| {
                         // Keep clicks on a tab away from the strip's double-click handler.
                         cx.stop_propagation();
@@ -1022,8 +1059,13 @@ impl Workspace {
                     .child(
                         div()
                             .id(("close", i))
+                            .size(px(18.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_full()
                             .text_color(if dirty { theme::warn() } else { theme::text_faint() })
-                            .hover(|s| s.text_color(theme::text()))
+                            .hover(|s| s.bg(theme::control_hover()).text_color(theme::text()))
                             .on_mouse_down(MouseButton::Left, cx.listener(move |ws, _, window, cx| {
                                 cx.stop_propagation();
                                 ws.close_tab_at(i, window, cx)
@@ -1035,6 +1077,72 @@ impl Workspace {
         strip
     }
 
+    /// "▾" at the end of the tab bar, only while not all tabs fit: lists
+    /// every tab to switch to.
+    fn render_tab_list(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.tabs_overflow && !self.tab_list {
+            return None;
+        }
+        let open = self.tab_list;
+        let mut button = div()
+            .id("tab-list")
+            .relative()
+            .flex_none()
+            .mx_1()
+            .size(px(ui::PILL_H - 2.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded_full()
+            .cursor_pointer()
+            .text_color(theme::text_dim())
+            .when(open, |d| d.bg(theme::control_active()))
+            .when(!open, |d| d.hover(|s| s.bg(theme::control_hover()).text_color(theme::text())))
+            .on_mouse_down(MouseButton::Left, cx.listener(|ws, _, _, cx| {
+                // Keep the window's close-on-click from closing it right away.
+                cx.stop_propagation();
+                let was_open = ws.tab_list;
+                ws.close_menu(cx);
+                ws.tab_list = !was_open;
+                cx.notify();
+            }))
+            .child("▾");
+        if open {
+            let mut list = ui::popover()
+                .id("tab-list-menu")
+                .occlude()
+                .flex()
+                .flex_col()
+                .min_w(px(240.))
+                .max_w(px(420.))
+                .max_h(px(480.))
+                .overflow_y_scroll()
+                .text_color(theme::text());
+            for (i, t) in self.tabs.iter().enumerate() {
+                let b = t.buffer.read(cx);
+                let active = i == self.active;
+                list = list.child(
+                    ui::row()
+                        .id(("tab-list-item", i))
+                        .flex_none()
+                        .h(px(28.))
+                        .pl_1()
+                        .pr_3()
+                        .hover(|s| s.bg(theme::control_hover()))
+                        .on_click(cx.listener(move |ws, _, window, cx| {
+                            ws.close_menu(cx);
+                            ws.switch_tab(i, window, cx);
+                        }))
+                        .child(div().w(px(20.)).flex_none().flex().justify_center().text_color(theme::accent()).child(if active { "✓" } else { "" }))
+                        .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(b.file_name()))
+                        .when(b.is_dirty(), |d| d.child(div().pl_2().text_color(theme::warn()).child("●"))),
+                );
+            }
+            button = button.child(deferred(div().absolute().top(px(ui::PILL_H)).right_0().child(list)).priority(1));
+        }
+        Some(button.into_any_element())
+    }
+
     fn render_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let bar = self.bar.as_ref()?;
         let (label, hint) = match bar.kind {
@@ -1044,11 +1152,14 @@ impl Workspace {
         let field = |input: &Entity<TextView>| {
             div()
                 .w(px(360.))
-                .px_1()
+                .h(px(ui::PILL_H))
+                .flex()
+                .items_center()
+                .px_3()
                 .bg(theme::bg())
                 .border_1()
                 .border_color(theme::accent())
-                .rounded_sm()
+                .rounded_full()
                 .child(input.clone())
         };
         let row = |label: &'static str| {
@@ -1057,29 +1168,55 @@ impl Workspace {
                 .flex_row()
                 .items_center()
                 .gap_2()
-                .child(div().text_color(theme::text_dim()).w(px(72.)).flex_none().whitespace_nowrap().child(label))
+                .child(div().text_color(theme::text_dim()).w(px(88.)).flex_none().whitespace_nowrap().child(label))
         };
-        let button = |id: &'static str, label: &'static str| {
+        let button = |id: &'static str, label: &'static str| ui::button(id, label, false);
+        // On/off pill for a find option; the input keeps the focus.
+        let option = |id: &'static str, label: &'static str, on: bool, flip: fn(&mut Workspace)| {
             div()
                 .id(id)
+                .flex_none()
+                .h(px(ui::PILL_H - 2.))
                 .px_3()
-                .rounded_sm()
+                .flex()
+                .items_center()
+                .rounded_full()
                 .border_1()
-                .border_color(theme::border())
-                .bg(theme::bg_alt())
-                .hover(|s| s.bg(theme::bg_hover()))
+                .cursor_pointer()
+                .text_size(px(12.))
+                .whitespace_nowrap()
+                .when(on, |d| d.bg(theme::control_active()).border_color(theme::accent()).text_color(theme::text()))
+                .when(!on, |d| {
+                    d.border_color(theme::glass_border()).text_color(theme::text_dim()).hover(|s| s.bg(theme::control_hover()))
+                })
+                .on_click(cx.listener(move |ws, _, window, cx| {
+                    flip(ws);
+                    if let Some(bar) = &ws.bar {
+                        window.focus(&bar.input.focus_handle(cx), cx);
+                    }
+                    cx.notify();
+                }))
                 .child(label)
         };
+        let searching = matches!(bar.kind, BarKind::Find | BarKind::Replace);
         let first = row(label)
             .child(field(&bar.input))
+            .when(searching, |d| {
+                d.child(option("match-case", tr!("Match case"), self.match_case, |ws| ws.match_case = !ws.match_case))
+                    .child(option("whole-word", tr!("Whole word"), self.whole_word, |ws| ws.whole_word = !ws.whole_word))
+            })
             .child(div().text_size(px(12.)).text_color(theme::text_faint()).child(hint))
             .child(div().flex_1())
             .child(
                 div()
                     .id("close-bar")
-                    .px_2()
+                    .size(px(ui::PILL_H))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_full()
                     .text_color(theme::text_dim())
-                    .hover(|s| s.text_color(theme::text()))
+                    .hover(|s| s.bg(theme::control_hover()).text_color(theme::text()))
                     .on_click(cx.listener(|ws, _, window, cx| ws.close_bar(window, cx)))
                     .child("×"),
             );
@@ -1093,6 +1230,8 @@ impl Workspace {
                 .bg(theme::bg_panel())
                 .border_b_1()
                 .border_color(theme::border())
+                .font_family(crate::ui::font())
+                .text_size(px(13.))
                 .child(first)
                 .children(bar.replace.as_ref().map(|(input, _)| {
                     row(tr!("Replace"))
@@ -1155,7 +1294,6 @@ impl Workspace {
             right.push(tr!("following end of file").into());
         }
         right.push(human_size(len));
-        right.push(b.line_ending.label().into());
         match t.kind {
             Kind::Binary => right.push(tr!("Binary").into()),
             Kind::Json => right.push("JSON".into()),
@@ -1165,15 +1303,17 @@ impl Workspace {
         }
         let bom = b.bom.then(|| {
             div()
-                .px_1()
-                .rounded_sm()
+                .px_2()
+                .rounded_full()
                 .border_1()
-                .border_color(theme::border())
+                .border_color(theme::glass_border())
                 .text_size(px(10.))
                 .text_color(theme::text_faint())
                 .child("BOM")
         });
-        let encoding = self.render_encoding_button(b.encoding, cx);
+        let (line_ending, enc, is_text) = (b.line_ending, b.encoding, t.kind != Kind::Binary);
+        let eol = self.render_eol_button(line_ending, is_text, cx);
+        let encoding = self.render_encoding_button(enc, cx);
 
         div()
             .flex()
@@ -1185,6 +1325,7 @@ impl Workspace {
             .bg(theme::bg_alt())
             .border_t_1()
             .border_color(theme::border())
+            .font_family(crate::ui::font())
             .text_size(px(12.))
             .text_color(theme::text_dim())
             .children(left)
@@ -1199,8 +1340,72 @@ impl Workspace {
                     .children(self.message.clone()),
             )
             .children(right)
+            .child(eol)
             .children(bom)
             .child(encoding)
+    }
+
+    /// "LF" in the status bar; a click offers the conversion.
+    fn render_eol_button(&self, current: LineEnding, enabled: bool, cx: &mut Context<Self>) -> AnyElement {
+        let open = self.eol_menu;
+        let mut el = div()
+            .id("line-endings")
+            .relative()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_1()
+            .h(px(20.))
+            .px_2()
+            .rounded_full()
+            .child(current.label());
+        if !enabled {
+            return el.into_any_element();
+        }
+        el = el
+            .cursor_pointer()
+            .when(open, |d| d.bg(theme::control_active()))
+            .when(!open, |d| d.hover(|s| s.bg(theme::control_hover())))
+            .on_mouse_down(MouseButton::Left, cx.listener(|ws, _, _, cx| {
+                // Keep the window's close-on-click from closing it right away.
+                cx.stop_propagation();
+                let was_open = ws.eol_menu;
+                ws.close_menu(cx);
+                ws.eol_menu = !was_open;
+                cx.notify();
+            }))
+            .child(div().text_color(theme::text_faint()).child("▴"));
+        if open {
+            let item = |id: &'static str, to: LineEnding, label: &'static str| {
+                ui::row()
+                    .id(id)
+                    .flex_none()
+                    .h(px(26.))
+                    .pl_1()
+                    .pr_3()
+                    .hover(|s| s.bg(theme::control_hover()))
+                    .child(div().w(px(20.)).flex().justify_center().text_color(theme::accent()).child(if to == current { "✓" } else { "" }))
+                    .child(label)
+                    .on_click(cx.listener(move |ws, _, window, cx| {
+                        ws.close_menu(cx);
+                        ws.convert_line_endings(to, window, cx);
+                    }))
+            };
+            let menu = ui::popover()
+                .id("eol-menu")
+                .occlude()
+                .flex()
+                .flex_col()
+                .min_w(px(200.))
+                .font_family(crate::ui::font())
+                .text_size(px(13.))
+                .text_color(theme::text())
+                .child(div().h(px(22.)).px_3().flex().items_end().pb(px(2.)).text_size(px(12.)).text_color(theme::text_faint()).child(tr!("Convert to")))
+                .child(item("eol-crlf", LineEnding::CrLf, tr!("Windows (CRLF)")))
+                .child(item("eol-lf", LineEnding::Lf, tr!("Linux, macOS (LF)")));
+            el = el.child(deferred(div().absolute().bottom(px(22.)).right_0().child(menu)).priority(1));
+        }
+        el.into_any_element()
     }
 
     fn render_encoding_button(&self, current: Encoding, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1212,11 +1417,12 @@ impl Workspace {
             .flex_row()
             .items_center()
             .gap_1()
-            .px_1()
-            .rounded_sm()
+            .h(px(20.))
+            .px_2()
+            .rounded_full()
             .cursor_pointer()
-            .when(open, |d| d.bg(theme::bg_active()))
-            .when(!open, |d| d.hover(|s| s.bg(theme::bg_hover())))
+            .when(open, |d| d.bg(theme::control_active()))
+            .when(!open, |d| d.hover(|s| s.bg(theme::control_hover())))
             .on_mouse_down(MouseButton::Left, cx.listener(|ws, _, _, cx| {
                 // Keep the window's close-on-click from closing it right away.
                 cx.stop_propagation();
@@ -1228,7 +1434,7 @@ impl Workspace {
             .child(current.label())
             .child(div().text_color(theme::text_faint()).child("▴"));
         if open {
-            el = el.child(deferred(div().absolute().bottom(px(22.)).right_0().child(self.render_encoding_menu(cx))).with_priority(1));
+            el = el.child(deferred(div().absolute().bottom(px(22.)).right_0().child(self.render_encoding_menu(cx))).priority(1));
         }
         el
     }
@@ -1244,40 +1450,29 @@ impl Workspace {
                 .h(px(22.))
                 .px_3()
                 .pb(px(2.))
-                .text_size(px(11.))
+                .text_size(px(12.))
                 .text_color(theme::text_faint())
-                .child(text.to_uppercase())
+                .child(text)
         };
         let item = |id: (&'static str, usize), label: String, checked: bool, enabled: bool| {
-            div()
+            ui::row()
                 .id(id)
                 .flex_none()
-                .flex()
-                .flex_row()
-                .items_center()
-                .h(px(24.))
-                .mx_1()
+                .h(px(26.))
                 .pl_1()
                 .pr_3()
-                .rounded_sm()
-                .when(enabled, |d| d.hover(|s| s.bg(theme::bg_hover())))
+                .when(enabled, |d| d.hover(|s| s.bg(theme::control_hover())))
                 .when(!enabled, |d| d.text_color(theme::text_faint()))
                 .child(div().w(px(20.)).flex().justify_center().text_color(theme::accent()).child(if checked { "✓" } else { "" }))
                 .child(label)
         };
-        let mut list = div()
+        let mut list = ui::popover()
             .id("encoding-menu")
             .occlude()
             .flex()
             .flex_col()
             .min_w(px(230.))
-            .py_1()
-            .bg(theme::bg_panel())
-            .border_1()
-            .border_color(theme::border())
-            .rounded_md()
-            .shadow_lg()
-            .font_family("DejaVu Sans")
+            .font_family(crate::ui::font())
             .text_size(px(13.))
             .text_color(theme::text())
             .child(heading(tr!("Reopen with encoding")));
@@ -1292,7 +1487,7 @@ impl Workspace {
                 row
             });
         }
-        list = list.child(div().my_1().h(px(1.)).bg(theme::border())).child(heading(tr!("Convert to")));
+        list = list.child(ui::separator()).child(heading(tr!("Convert to")));
         let targets = [
             (Encoding::Utf8, false),
             (Encoding::Utf8, true),
@@ -1372,6 +1567,22 @@ impl Workspace {
     }
 
     /// Save in another encoding from now on.
+    /// Save with only `to` line endings from now on; also evens out a file
+    /// with mixed line endings.
+    pub(crate) fn convert_line_endings(&mut self, to: LineEnding, window: &mut Window, cx: &mut Context<Self>) {
+        let buffer = self.tab().buffer.clone();
+        let b = buffer.read(cx);
+        if b.line_ending == to && b.convert_eol {
+            return;
+        }
+        buffer.update(cx, |b, cx| {
+            b.convert_line_endings(to);
+            cx.notify();
+        });
+        self.update_title(window, cx);
+        self.flash(tr!("Will be saved with {line_endings} line endings", line_endings = to.label()).into(), cx);
+    }
+
     fn convert_encoding(&mut self, enc: Encoding, bom: bool, window: &mut Window, cx: &mut Context<Self>) {
         let buffer = self.tab().buffer.clone();
         let b = buffer.read(cx);
@@ -1393,22 +1604,6 @@ impl Workspace {
         self.update_title(window, cx);
         self.flash(tr!("Will be saved as {encoding}", encoding = encoding_label(enc, bom)).into(), cx);
     }
-}
-
-/// A small button for bars and dialogs; `primary` in the accent color.
-fn bar_button(id: &'static str, label: &'static str, primary: bool) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .flex_none()
-        .px_3()
-        .py(px(2.))
-        .rounded_sm()
-        .border_1()
-        .border_color(theme::border())
-        .cursor_pointer()
-        .when(primary, |d| d.bg(theme::accent()).text_color(theme::on_accent()))
-        .when(!primary, |d| d.bg(theme::bg_alt()).hover(|s| s.bg(theme::bg_hover())))
-        .child(label)
 }
 
 /// "UTF-8 with BOM" etc. for menus and messages.
@@ -1437,6 +1632,16 @@ impl Focusable for Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_title(window, cx);
+        let overflow = self.tab_scroll.max_offset().x > px(0.);
+        if overflow != self.tabs_overflow {
+            // The bar changed its width; bring the active tab back into view.
+            self.tabs_overflow = overflow;
+            self.tab_in_view = None;
+        }
+        if self.tab_in_view != Some(self.active) {
+            self.tab_in_view = Some(self.active);
+            self.tab_scroll.scroll_to_item(self.active);
+        }
         let t = self.tab();
         let content: AnyElement = match t.mode {
             ViewMode::Text => t.text.clone().into_any_element(),
@@ -1518,44 +1723,99 @@ impl Render for Workspace {
                 .absolute()
                 .size_0()
             })
-            .child(div().font_family("DejaVu Sans").child(self.render_menubar(cx)))
+            .child(div().font_family(crate::ui::font()).child(self.render_menubar(cx)))
             .child(
                 div()
                     .flex()
                     .flex_row()
                     .items_center()
                     .h(px(30.))
-                    .border_t_1()
                     .bg(theme::bg_alt())
                     .border_b_1()
                     .border_color(theme::border())
-                    .child(self.render_tabs(cx)),
+                    .font_family(crate::ui::font())
+                    .text_size(px(13.))
+                    .child(self.render_tabs(cx))
+                    .children(self.render_tab_list(cx)),
             )
             .children(self.render_bar(cx))
             .children(self.render_external(cx))
             .children(Self::render_update_bar(cx))
             .child(div().flex_1().min_h_0().overflow_hidden().child(content))
             .when(status_bar, |d| d.child(self.render_status(cx)))
-            .children(self.dialog.map(|d| self.render_dialog(d, cx)))
+            .children(self.dialog.map(|d| self.render_dialog(d, window, cx)))
     }
 }
 
-static WORDMARK_LIGHT: LazyLock<Arc<Image>> = LazyLock::new(|| {
-    Arc::new(Image::from_bytes(ImageFormat::Png, include_bytes!("../assets/logo/png/rustpad-wordmark.png").to_vec()))
-});
+/// Size of the wordmark in the About dialog; the SVG is 848 x 256.
+const WORDMARK_W: f32 = 300.;
+const WORDMARK_H: f32 = WORDMARK_W * 256. / 848.;
+
+/// The wordmark as last rasterized, keyed by dark scheme and scale factor.
+type CachedWordmark = Option<((bool, u32), Arc<RenderImage>)>;
+
+thread_local! {
+    static WORDMARK: RefCell<CachedWordmark> = const { RefCell::new(None) };
+}
+
+/// The wordmark rasterized at its displayed size in device pixels. Drawn at
+/// the SVG's own size and scaled down by the GPU, its edges turn jagged.
+fn wordmark(window: &Window, cx: &App) -> Option<Arc<RenderImage>> {
+    let dark = theme::scheme().dark;
+    let scale = window.scale_factor();
+    let key = (dark, scale.to_bits());
+    WORDMARK.with_borrow_mut(|cached| {
+        if let Some((k, image)) = cached
+            && *k == key
+        {
+            return Some(Arc::clone(image));
+        }
+        let bytes: &[u8] = if dark {
+            include_bytes!("../assets/logo/rustpad-wordmark-dark.svg")
+        } else {
+            include_bytes!("../assets/logo/rustpad-wordmark.svg")
+        };
+        let renderer = cx.svg_renderer();
+        let svg = renderer.parse_svg(bytes).ok()?;
+        let px_size = size(DevicePixels((WORDMARK_W * scale).round() as i32), DevicePixels((WORDMARK_H * scale).round() as i32));
+        let image = renderer.render_parsed(&svg, SvgSize::ExactSize(px_size)).ok()?;
+        *cached = Some((key, Arc::clone(&image)));
+        Some(image)
+    })
+}
 /// Logo orange, independent of the color scheme.
 const BRAND: u32 = 0xe2531f;
 const BRAND_LIGHT: u32 = 0xf77b45;
 const BRAND_DARK: u32 = 0xb9380f;
 
-static WORDMARK_DARK: LazyLock<Arc<Image>> = LazyLock::new(|| {
-    Arc::new(Image::from_bytes(ImageFormat::Png, include_bytes!("../assets/logo/png/rustpad-wordmark-dark.png").to_vec()))
-});
+/// The About header's light in the Aurora scheme: violet and indigo rising
+/// from the bottom edge, a hint of teal from the top right.
+fn aurora_glow() -> impl IntoElement {
+    let layer = |angle: f32, color: u32, reach: f32| {
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .rounded_t(px(ui::R_DIALOG))
+            .bg(linear_gradient(angle, linear_color_stop(rgba(color), 0.), linear_color_stop(rgba(color & !0xff), reach)))
+    };
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
+        .bg(rgb(0x0f0f14))
+        .rounded_t(px(ui::R_DIALOG))
+        .child(layer(0., 0x7c3aed8c, 0.8))
+        .child(layer(20., 0x4f46e573, 0.55))
+        .child(layer(225., 0x2dd4bf38, 0.6))
+}
 
 impl Workspace {
-    fn render_dialog(&self, d: Dialog, cx: &mut Context<Self>) -> AnyElement {
+    fn render_dialog(&self, d: Dialog, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let content = match d {
-            Dialog::About => Self::render_about(),
+            Dialog::About => Self::render_about(window, cx),
             Dialog::Updates => Self::render_updates(cx),
         };
         deferred(
@@ -1572,7 +1832,7 @@ impl Workspace {
                 .bg(theme::shadow())
                 .on_mouse_down(MouseButton::Left, cx.listener(|ws, _, _, cx| ws.close_overlay(cx)))
                 .child(
-                    div()
+                    ui::dialog()
                         .id("dialog")
                         .occlude()
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -1581,12 +1841,7 @@ impl Workspace {
                         .max_h(gpui::relative(0.94))
                         .flex()
                         .flex_col()
-                        .bg(theme::bg_panel())
-                        .border_1()
-                        .border_color(theme::border())
-                        .rounded_lg()
-                        .shadow_lg()
-                        .font_family("DejaVu Sans")
+                        .font_family(crate::ui::font())
                         .child(div().id("dialog-content").flex_1().min_h_0().overflow_y_scroll().child(content))
                         .child(
                             div()
@@ -1596,26 +1851,16 @@ impl Workspace {
                                 .px_6()
                                 .py_3()
                                 .border_t_1()
-                                .border_color(theme::border())
-                                .bg(theme::bg_alt())
-                                .rounded_b_lg()
+                                .border_color(theme::glass_border())
                                 .child(
-                                    div()
-                                        .id("dialog-ok")
-                                        .px_5()
-                                        .py_1()
-                                        .rounded_md()
-                                        .bg(theme::accent())
-                                        .text_color(theme::on_accent())
-                                        .cursor_pointer()
-                                        .hover(|s| s.opacity(0.85))
-                                        .on_click(cx.listener(|ws, _, _, cx| ws.close_overlay(cx)))
-                                        .child("OK"),
+                                    ui::button("dialog-ok", "OK", true)
+                                        .px_6()
+                                        .on_click(cx.listener(|ws, _, _, cx| ws.close_overlay(cx))),
                                 ),
                         ),
                 ),
         )
-        .with_priority(3)
+        .priority(3)
         .into_any_element()
     }
 
@@ -1626,13 +1871,13 @@ impl Workspace {
         let text = update::note(cx).unwrap_or_else(|| tr!("rustpad++ {version} is available.", version = release.version));
         let page = release.page.clone();
         let main = if update::can_update() {
-            bar_button("update-install", tr!("Install"), true)
+            ui::button("update-install", tr!("Install"), true)
                 .when(busy, |d| d.opacity(0.5))
                 .on_click(|_, _, cx| update::install(update::Action::Update, cx))
         } else {
             // A build run from its own folder cannot replace itself.
             let page = page.clone();
-            bar_button("update-download", tr!("Download"), true).on_click(move |_, _, cx| cx.open_url(&page))
+            ui::button("update-download", tr!("Download"), true).on_click(move |_, _, cx| cx.open_url(&page))
         };
         Some(
             div()
@@ -1645,14 +1890,14 @@ impl Workspace {
                 .bg(theme::bg_panel())
                 .border_b_1()
                 .border_color(theme::accent())
-                .font_family("DejaVu Sans")
+                .font_family(crate::ui::font())
                 .text_size(px(13.))
                 .child(div().text_color(theme::accent()).child("⬆"))
                 .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(text))
                 .child(main)
-                .child(bar_button("update-notes", tr!("What's new?"), false).on_click(move |_, _, cx| cx.open_url(&page)))
+                .child(ui::button("update-notes", tr!("What's new?"), false).on_click(move |_, _, cx| cx.open_url(&page)))
                 .child(
-                    bar_button("update-skip", tr!("Skip this version"), false)
+                    ui::button("update-skip", tr!("Skip this version"), false)
                         .when(busy, |d| d.opacity(0.5))
                         .on_click(|_, _, cx| update::skip(cx)),
                 )
@@ -1667,22 +1912,22 @@ impl Workspace {
         let (busy, checking) = state.map_or((false, false), |u| (u.busy, u.checking));
         let newer = update::newer(cx);
         let mut buttons = div().flex().flex_row().flex_wrap().gap_2().child(
-            bar_button("updates-check", tr!("Check now"), newer.is_none())
+            ui::button("updates-check", tr!("Check now"), newer.is_none())
                 .when(checking || busy, |d| d.opacity(0.5))
                 .on_click(|_, _, cx| update::check(cx)),
         );
         if let Some(release) = newer {
             buttons = buttons.child(if update::can_update() {
-                bar_button("updates-install", tr!("Install"), true)
+                ui::button("updates-install", tr!("Install"), true)
                     .when(busy, |d| d.opacity(0.5))
                     .on_click(|_, _, cx| update::install(update::Action::Update, cx))
             } else {
-                bar_button("updates-download", tr!("Download"), true).on_click(move |_, _, cx| cx.open_url(&release.page))
+                ui::button("updates-download", tr!("Download"), true).on_click(move |_, _, cx| cx.open_url(&release.page))
             });
         }
         if update::is_build() {
             buttons = buttons.child(
-                bar_button("updates-install-app", tr!("Install for all users"), false)
+                ui::button("updates-install-app", tr!("Install for all users"), false)
                     .when(busy, |d| d.opacity(0.5))
                     .on_click(|_, _, cx| update::install(update::Action::InstallApp, cx)),
             );
@@ -1713,10 +1958,9 @@ impl Workspace {
             .into_any_element()
     }
 
-    fn render_about() -> AnyElement {
-        // Wordmark text color follows the scheme. PNG, not SVG: gpui 0.2.2 skips the
-        // RGBA->BGRA swap for SVG images, which turns the orange blue.
-        let logo = if theme::scheme().dark { &WORDMARK_DARK } else { &WORDMARK_LIGHT };
+    fn render_about(window: &Window, cx: &App) -> AnyElement {
+        // Wordmark text color follows the scheme.
+        let logo = wordmark(window, cx);
         let build = if cfg!(debug_assertions) { tr!("Debug build") } else { tr!("Release build") };
         let repo = env!("CARGO_PKG_REPOSITORY");
         let repo_name = repo.trim_start_matches("https://github.com/");
@@ -1741,14 +1985,14 @@ impl Workspace {
                 .items_center()
                 .gap_1()
                 .py_2()
-                .rounded_md()
+                .rounded(px(ui::R_POPOVER))
                 .border_1()
-                .border_color(theme::border())
-                .bg(theme::bg_alt())
+                .border_color(theme::glass_border())
+                .bg(theme::control())
                 .child(
                     div()
                         .font_family("DejaVu Sans Mono")
-                        .font_weight(FontWeight::BOLD)
+                        .font_weight(FontWeight::SEMIBOLD)
                         .text_size(px(16.))
                         .text_color(rgb(BRAND))
                         .child(glyph),
@@ -1766,14 +2010,14 @@ impl Workspace {
                 .items_center()
                 .justify_center()
                 .gap_2()
-                .py(px(7.))
-                .rounded_md()
+                .h(px(30.))
+                .rounded_full()
                 .border_1()
-                .border_color(theme::border())
-                .bg(theme::bg_alt())
+                .border_color(theme::glass_border())
+                .bg(theme::control())
                 .text_size(px(12.5))
                 .cursor_pointer()
-                .hover(|s| s.border_color(rgb(BRAND)).bg(theme::bg_hover()))
+                .hover(|s| s.border_color(rgb(BRAND)).bg(theme::control_hover()))
                 .child(icon(glyph, 15.).text_color(rgb(BRAND)))
                 .child(label)
         };
@@ -1808,29 +2052,32 @@ impl Workspace {
                 .child(value)
         };
 
+        // Aurora lights the header from below; the other schemes get the brand stripe.
+        let aurora = theme::scheme().name == "Aurora";
         div()
             .flex()
             .flex_col()
-            // Header: brand stripe, wordmark, version, claim.
+            // Header: brand stripe or glow, wordmark, version, claim.
             .child(
                 div()
+                    .relative()
                     .flex()
                     .flex_col()
                     .items_center()
                     .gap_3()
                     .pb_5()
-                    .bg(theme::bg())
-                    .rounded_t_lg()
+                    .rounded_t(px(ui::R_DIALOG))
                     .border_b_1()
-                    .border_color(theme::border())
-                    .child(
-                        div().h(px(4.)).w_full().rounded_t_lg().bg(linear_gradient(
+                    .border_color(theme::glass_border())
+                    .when(aurora, |d| d.pt_4().child(aurora_glow()))
+                    .when(!aurora, |d| {
+                        d.bg(theme::bg()).child(div().h(px(4.)).w_full().rounded_t(px(ui::R_DIALOG)).bg(linear_gradient(
                             90.,
                             linear_color_stop(rgb(BRAND_LIGHT), 0.),
                             linear_color_stop(rgb(BRAND_DARK), 1.),
-                        )),
-                    )
-                    .child(img(Arc::clone(logo)).mt_3().w(px(300.)).h(px(300. * 256. / 848.)))
+                        )))
+                    })
+                    .children(logo.map(|logo| img(logo).mt_3().w(px(WORDMARK_W)).h(px(WORDMARK_H))))
                     .child(
                         div()
                             .flex()
@@ -1841,8 +2088,8 @@ impl Workspace {
                             .py(px(2.))
                             .rounded_full()
                             .border_1()
-                            .border_color(theme::border())
-                            .bg(theme::bg_panel())
+                            .border_color(theme::glass_border())
+                            .bg(theme::control())
                             .text_size(px(12.))
                             .text_color(theme::text_dim())
                             .child(tr!("Version {version}", version = env!("CARGO_PKG_VERSION")))
@@ -1858,9 +2105,9 @@ impl Workspace {
                             .child(
                                 div()
                                     .text_size(px(17.))
-                                    .font_weight(FontWeight::BOLD)
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(theme::text())
-                                    .child(tr!("Less editor. More text.")),
+                                    .child(tr!("Less editor. More text. Fast.")),
                             )
                             .child(
                                 div()
@@ -1909,7 +2156,7 @@ impl Workspace {
                             .gap(px(6.))
                             .child(info("about-author", "user", tr!("Author"), author.to_string(), Some(format!("https://github.com/{author}"))))
                             .child(info("about-repo", "code", tr!("Repository"), repo_name.to_string(), Some(repo.to_string())))
-                            .child(info("about-built", "package", tr!("Built with"), tr!("Rust and GPUI").into(), None))
+                            .child(info("about-built", "package", tr!("Built with"), tr!("Rust and GPUI Community Edition").into(), Some("https://github.com/gpui-ce/gpui-ce".to_string())))
                             .child(info("about-config", "folder", tr!("Settings"), config_dir, None)),
                     )
                     .child(
@@ -1920,10 +2167,10 @@ impl Workspace {
                             .gap_3()
                             .px_4()
                             .py_3()
-                            .rounded_md()
+                            .rounded(px(ui::R_POPOVER))
                             .border_1()
-                            .border_color(theme::border())
-                            .bg(theme::bg_alt())
+                            .border_color(theme::glass_border())
+                            .bg(theme::control())
                             .child(icon("heart", 18.).text_color(rgb(BRAND)))
                             .child(
                                 div()
@@ -2053,6 +2300,12 @@ impl Workspace {
                 buffer.encoding = enc;
                 buffer.bom = bom && enc.has_bom();
             }
+            if t.backup.is_some()
+                && let Some(eol) = t.convert_eol
+            {
+                buffer.line_ending = eol;
+                buffer.convert_eol = true;
+            }
             let dirty = buffer.is_dirty();
             let version = buffer.version();
             self.new_tab_with_id(buffer, Some(t.id), window, cx);
@@ -2116,6 +2369,7 @@ impl Workspace {
                 dirty,
                 encoding: b.encoding,
                 bom: b.bom,
+                convert_eol: b.convert_eol.then_some(b.line_ending),
             });
         }
         let active = self.active.min(tabs.len().saturating_sub(1));
@@ -2253,18 +2507,7 @@ impl Workspace {
                 name = name,
             ),
         };
-        let button = |id: &'static str, label: &'static str, primary: bool| {
-            div()
-                .id(id)
-                .px_3()
-                .py(px(2.))
-                .rounded_sm()
-                .border_1()
-                .border_color(theme::border())
-                .when(primary, |d| d.bg(theme::accent()).text_color(theme::on_accent()))
-                .when(!primary, |d| d.bg(theme::bg_alt()).hover(|s| s.bg(theme::bg_hover())))
-                .child(label)
-        };
+        let button = ui::button;
         let mut row = div()
             .flex()
             .flex_row()
@@ -2275,7 +2518,7 @@ impl Workspace {
             .bg(theme::bg_panel())
             .border_b_1()
             .border_color(theme::warn())
-            .font_family("DejaVu Sans")
+            .font_family(crate::ui::font())
             .text_size(px(13.))
             .child(div().text_color(theme::warn()).child("⚠"))
             .child(div().flex_1().min_w_0().child(text));

@@ -60,7 +60,7 @@ Priority: optional
 Architecture: $deb_arch
 Maintainer: srcmkr <srcmkr@users.noreply.github.com>
 Homepage: https://github.com/srcmkr/rustpad-plusplus
-Depends: libc6 (>= 2.35), libgcc-s1, libxkbcommon0, libxkbcommon-x11-0, libxcb1, libfontconfig1, libwayland-client0, libvulkan1
+Depends: libc6 (>= 2.35), libgcc-s1, libxkbcommon0, libxkbcommon-x11-0, libxcb1, libfontconfig1, libfreetype6, libwayland-client0, libvulkan1
 Recommends: pkexec | policykit-1, xdg-utils
 Installed-Size: $(du -sk "$deb" | cut -f1)
 Description: Fast text editor for files of any size, in the spirit of Notepad++

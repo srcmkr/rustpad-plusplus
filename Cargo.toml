@@ -9,7 +9,7 @@ edition = "2024"
 authors = ["srcmkr"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/srcmkr/rustpad-plusplus"
-rust-version = "1.90"
+rust-version = "1.95"
 
 [package]
 name = "rustpad"
@@ -20,14 +20,19 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# Not on crates.io; also lets cargo-deny accept the path dependency.
+publish = false
 
 [dependencies]
 anyhow = "1.0.104"
 rustpad-update = { path = "crates/rustpad-update" }
 async-channel = "2"
 encoding_rs = "0.8"
-gpui = "0.2.2"
+gpui = { package = "gpui-ce", version = "0.3" }
+gpui_platform = { package = "gpui_ce_platform", version = "0.3" }
 memchr = "2.8.3"
+# Find ignoring case; only the parts that needs.
+regex = { version = "1.13", default-features = false, features = ["std", "perf", "unicode-case"] }
 memmap2 = "0.9.11"
 pulldown-cmark = { version = "0.13.4", default-features = false }
 unicode-width = "0.2"

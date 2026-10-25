@@ -99,6 +99,50 @@ impl LineEnding {
     }
 }
 
+/// Rewrites every line ending of a stream to one kind, chunk by chunk; a
+/// "\r\n" split between two chunks is still one line ending.
+struct EolConverter {
+    to: LineEnding,
+    /// The previous chunk ended in "\r" (not yet written for `Lf`).
+    cr: bool,
+}
+
+impl EolConverter {
+    fn new(to: LineEnding) -> Self {
+        EolConverter { to, cr: false }
+    }
+
+    fn convert(&mut self, chunk: &[u8], out: &mut Vec<u8>) {
+        out.clear();
+        out.reserve(chunk.len() + chunk.len() / 16);
+        for &b in chunk {
+            match self.to {
+                LineEnding::Lf => {
+                    if self.cr && b != b'\n' {
+                        out.push(b'\r');
+                    }
+                    self.cr = b == b'\r';
+                    if !self.cr {
+                        out.push(b);
+                    }
+                }
+                LineEnding::CrLf => {
+                    if b == b'\n' && !self.cr {
+                        out.push(b'\r');
+                    }
+                    out.push(b);
+                    self.cr = b == b'\r';
+                }
+            }
+        }
+    }
+
+    /// What is still held back at the end of the stream.
+    fn finish(&self) -> &'static [u8] {
+        if self.to == LineEnding::Lf && self.cr { b"\r" } else { b"" }
+    }
+}
+
 pub struct Buffer {
     orig: Arc<Source>,
     add: Vec<u8>,
@@ -111,7 +155,10 @@ pub struct Buffer {
     version: u64,
     saved_version: u64,
     pub path: Option<PathBuf>,
+    /// What Enter inserts; with `convert_eol`, also what saving writes.
     pub line_ending: LineEnding,
+    /// Rewrite every line ending to `line_ending` when saving.
+    pub convert_eol: bool,
     index: Arc<LineIndex>,
     /// Name shown for untitled documents ("new 3").
     pub title: Option<String>,
@@ -239,6 +286,15 @@ impl Buffer {
         self.version += 1;
     }
 
+    /// Save with only `to` line endings from now on (marks the document
+    /// modified). The text keeps its line endings until then, so this is
+    /// instant for files of any size.
+    pub fn convert_line_endings(&mut self, to: LineEnding) {
+        self.line_ending = to;
+        self.convert_eol = true;
+        self.version += 1;
+    }
+
     /// Test helper and "new from text".
     pub fn from_text(text: &str) -> Buffer {
         let mut b = Self::empty();
@@ -271,6 +327,7 @@ impl Buffer {
             saved_version: 0,
             path,
             line_ending,
+            convert_eol: false,
             index,
             title: None,
             stamp: None,
@@ -415,58 +472,6 @@ impl Buffer {
                 return Some(pos - c.len() as u64 + i as u64);
             }
             pos -= c.len() as u64;
-        }
-        None
-    }
-
-    /// Search for `needle` starting at `from`. `progress` gets the current
-    /// position periodically and may return false to cancel.
-    pub fn find(&self, needle: &[u8], from: u64, mut progress: impl FnMut(u64) -> bool) -> Option<u64> {
-        if needle.is_empty() {
-            return None;
-        }
-        let finder = memchr::memmem::Finder::new(needle);
-        const WINDOW: u64 = 4 << 20;
-        let overlap = needle.len() as u64 - 1;
-        let mut pos = from;
-        while pos < self.len {
-            if !progress(pos) {
-                return None;
-            }
-            let end = (pos + WINDOW + overlap).min(self.len);
-            let hay = self.slice(pos..end);
-            if let Some(i) = finder.find(&hay) {
-                return Some(pos + i as u64);
-            }
-            if end == self.len {
-                break;
-            }
-            pos += WINDOW;
-        }
-        None
-    }
-
-    pub fn rfind(&self, needle: &[u8], before: u64, mut progress: impl FnMut(u64) -> bool) -> Option<u64> {
-        if needle.is_empty() {
-            return None;
-        }
-        let finder = memchr::memmem::FinderRev::new(needle);
-        const WINDOW: u64 = 4 << 20;
-        let overlap = needle.len() as u64 - 1;
-        let mut end = before.min(self.len);
-        while end > 0 {
-            if !progress(end) {
-                return None;
-            }
-            let start = end.saturating_sub(WINDOW);
-            let hay = self.slice(start..(end + overlap).min(self.len));
-            if let Some(i) = finder.rfind(&hay) {
-                let at = start + i as u64;
-                if at < before {
-                    return Some(at);
-                }
-            }
-            end = start;
         }
         None
     }
@@ -625,13 +630,13 @@ impl Buffer {
         cursor_after
     }
 
-    /// Replace every `needle_len`-byte match starting at `hits` (sorted,
-    /// non-overlapping) with `text`, as a single undo step. Rebuilds the
-    /// affected pieces in one pass, so it stays linear in the number of hits.
-    /// Returns the cursor position (start of the first replacement).
-    pub fn replace_all(&mut self, hits: &[u64], needle_len: u64, text: &str, cursor_before: u64) -> u64 {
-        let (Some(&first), Some(&last)) = (hits.first(), hits.last()) else { return cursor_before };
-        let span = first..(last + needle_len).min(self.len);
+    /// Replace every match in `hits` (sorted, non-overlapping) with `text`,
+    /// as a single undo step. Rebuilds the affected pieces in one pass, so it
+    /// stays linear in the number of hits. Returns the cursor position (start
+    /// of the first replacement).
+    pub fn replace_all(&mut self, hits: &[Range<u64>], text: &str, cursor_before: u64) -> u64 {
+        let (Some(first), Some(last)) = (hits.first(), hits.last()) else { return cursor_before };
+        let span = first.start..last.end.min(self.len);
         let removed = self.raw_remove(span.clone());
         // All replacements share one copy of `text` in the add buffer.
         let repl = (!text.is_empty()).then(|| {
@@ -659,10 +664,10 @@ impl Buffer {
             }
         };
         let mut prev = span.start;
-        for &h in hits {
-            copy(prev, h, &mut pieces);
+        for h in hits {
+            copy(prev, h.start, &mut pieces);
             pieces.extend(repl);
-            prev = h + needle_len;
+            prev = h.end;
         }
         copy(prev, span.end, &mut pieces);
 
@@ -741,6 +746,7 @@ impl Buffer {
             saved_version: self.saved_version,
             path: self.path.clone(),
             line_ending: self.line_ending,
+            convert_eol: self.convert_eol,
             index: self.index.clone(),
             title: self.title.clone(),
             stamp: self.stamp,
@@ -871,15 +877,25 @@ impl Buffer {
                 )
             };
             let mut enc = Encoder::new(self.encoding, w);
+            let mut eol = self.convert_eol.then(|| (EolConverter::new(self.line_ending), Vec::new()));
             let mut written = 0u64;
             for p in &self.pieces {
                 for chunk in self.piece_bytes(p).chunks(8 << 20) {
-                    enc.write_utf8(chunk).map_err(unmappable)?;
+                    match &mut eol {
+                        Some((conv, buf)) => {
+                            conv.convert(chunk, buf);
+                            enc.write_utf8(buf).map_err(unmappable)?;
+                        }
+                        None => enc.write_utf8(chunk).map_err(unmappable)?,
+                    }
                     written += chunk.len() as u64;
                     if !progress(written) {
                         return Err(io::Error::new(io::ErrorKind::Interrupted, "save cancelled"));
                     }
                 }
+            }
+            if let Some((conv, _)) = &eol {
+                enc.write_utf8(conv.finish()).map_err(unmappable)?;
             }
             let w = enc.finish().map_err(|e| match e {
                 FinishError::Io(e) => e,
@@ -1079,8 +1095,8 @@ mod tests {
         b.replace(2..2, "X", 0);
         b.replace(0..0, "-", 0);
         assert_eq!(all(&b), "-a-Xb-c--d");
-        let hits = [0, 2, 5, 7, 8];
-        b.replace_all(&hits, 1, "+=", 3);
+        let hits = [0..1, 2..3, 5..6, 7..8, 8..9];
+        b.replace_all(&hits, "+=", 3);
         assert_eq!(all(&b), "+=a+=Xb+=c+=+=d");
         b.undo();
         assert_eq!(all(&b), "-a-Xb-c--d");
@@ -1094,15 +1110,17 @@ mod tests {
     }
 
     #[test]
+    // One match is a one-element list of ranges, not a list of numbers.
+    #[allow(clippy::single_range_in_vec_init)]
     fn replace_all_with_nothing_and_longer_needle() {
         let mut b = Buffer::from_text("foo bar foo baz foo");
-        b.replace_all(&[0, 8, 16], 3, "", 0);
+        b.replace_all(&[0..3, 8..11, 16..19], "", 0);
         assert_eq!(all(&b), " bar  baz ");
         b.undo();
         assert_eq!(all(&b), "foo bar foo baz foo");
         assert!(!b.can_undo() && b.can_redo());
         let mut e = Buffer::from_text("foo");
-        e.replace_all(&[0], 3, "", 0);
+        e.replace_all(&[0..3], "", 0);
         assert_eq!(all(&e), "");
         e.undo();
         assert_eq!(all(&e), "foo");
@@ -1112,8 +1130,9 @@ mod tests {
     #[test]
     fn find_and_lines() {
         let b = Buffer::from_text("one\ntwo\nthree\n");
-        assert_eq!(b.find(b"three", 0, |_| true), Some(8));
-        assert_eq!(b.rfind(b"o", 14, |_| true), Some(6));
+        let find = |t: &str| crate::doc::search::Search::new(&crate::doc::search::Query { text: t.into(), match_case: true, whole_word: false }).unwrap();
+        assert_eq!(find("three").find(&b, 0, |_| true), Some(8..13));
+        assert_eq!(find("o").rfind(&b, 14, |_| true), Some(6..7));
         assert_eq!(b.line_of_offset(9), Some(2));
         assert_eq!(b.offset_of_line(2), Some(8));
         assert_eq!(b.offset_of_line(3), Some(14));
@@ -1298,5 +1317,65 @@ mod encoding_tests {
         b.reload().unwrap();
         assert_eq!((b.encoding, b.text(0..b.len())), (Encoding::Utf16Le, "hi".to_string()));
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+}
+
+#[cfg(test)]
+mod line_ending_tests {
+    use super::*;
+
+    /// Converts `input` cut into the given chunk sizes.
+    fn convert(input: &[u8], to: LineEnding, cuts: &[usize]) -> Vec<u8> {
+        let mut conv = EolConverter::new(to);
+        let (mut out, mut buf, mut rest) = (Vec::new(), Vec::new(), input);
+        for &n in cuts.iter().chain(std::iter::once(&usize::MAX)) {
+            let (chunk, tail) = rest.split_at(n.min(rest.len()));
+            conv.convert(chunk, &mut buf);
+            out.extend_from_slice(&buf);
+            rest = tail;
+        }
+        out.extend_from_slice(conv.finish());
+        out
+    }
+
+    #[test]
+    fn mixed_line_endings_become_one_kind() {
+        let mixed = b"a\r\nb\nc\r\n\nd\re";
+        assert_eq!(convert(mixed, LineEnding::Lf, &[]), b"a\nb\nc\n\nd\re");
+        assert_eq!(convert(mixed, LineEnding::CrLf, &[]), b"a\r\nb\r\nc\r\n\r\nd\re");
+    }
+
+    #[test]
+    fn line_ending_split_between_chunks() {
+        // Every cut position, including between "\r" and "\n".
+        let text = b"one\r\ntwo\nthree\r\n";
+        for cut in 0..=text.len() {
+            assert_eq!(convert(text, LineEnding::Lf, &[cut]), b"one\ntwo\nthree\n", "cut {cut}");
+            assert_eq!(convert(text, LineEnding::CrLf, &[cut]), b"one\r\ntwo\r\nthree\r\n", "cut {cut}");
+        }
+        // A lone "\r" at the very end is kept.
+        assert_eq!(convert(b"x\r", LineEnding::Lf, &[1]), b"x\r");
+    }
+
+    #[test]
+    fn saving_converts_line_endings() {
+        let dir = std::env::temp_dir().join(format!("rustpad-eol-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a.txt");
+        std::fs::write(&path, b"one\ntwo\r\nthree\n").unwrap();
+        let mut b = Buffer::open(&path).unwrap();
+        assert_eq!(b.line_ending, LineEnding::Lf);
+        b.convert_line_endings(LineEnding::CrLf);
+        assert!(b.is_dirty());
+        // Typed text and the existing lines end up alike.
+        let end = b.len();
+        b.replace(end..end, "four\n", end);
+        b.snapshot().write_to(&path, |_| true).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"one\r\ntwo\r\nthree\r\nfour\r\n");
+        let version = b.version();
+        b.finish_save(&path, version);
+        assert!(!b.convert_eol && !b.is_dirty());
+        assert_eq!(b.line_ending, LineEnding::CrLf);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

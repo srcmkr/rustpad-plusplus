@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 use crate::doc::Buffer;
+use crate::doc::buffer::LineEnding;
 use crate::doc::encoding::Encoding;
 
 static LOCK: OnceLock<File> = OnceLock::new();
@@ -60,6 +61,8 @@ pub struct TabState {
     pub dirty: bool,
     pub encoding: Encoding,
     pub bom: bool,
+    /// Line endings that saving will convert to.
+    pub convert_eol: Option<LineEnding>,
 }
 
 pub struct Session {
@@ -97,6 +100,9 @@ pub fn write(session: &Session) -> io::Result<()> {
             out.push_str(&format!("backup=b{}.bak\n", t.id));
         }
         out.push_str(&format!("encoding={}\nbom={}\n", t.encoding.id(), t.bom));
+        if let Some(eol) = t.convert_eol {
+            out.push_str(&format!("convert_eol={}\n", eol.label()));
+        }
     }
     let tmp = dir.join("session.tmp");
     std::fs::write(&tmp, out)?;
@@ -126,6 +132,7 @@ pub struct LoadedTab {
     /// Missing in sessions from before encodings were selectable.
     pub encoding: Option<Encoding>,
     pub bom: Option<bool>,
+    pub convert_eol: Option<LineEnding>,
 }
 
 pub fn load() -> (Vec<LoadedTab>, usize) {
@@ -145,6 +152,7 @@ pub fn load() -> (Vec<LoadedTab>, usize) {
                 backup: None,
                 encoding: None,
                 bom: None,
+                convert_eol: None,
             });
             continue;
         }
@@ -165,6 +173,7 @@ pub fn load() -> (Vec<LoadedTab>, usize) {
             "backup" => t.backup = Some(bdir.join(v)),
             "encoding" => t.encoding = Encoding::from_id(v),
             "bom" => t.bom = Some(v == "true"),
+            "convert_eol" => t.convert_eol = [LineEnding::Lf, LineEnding::CrLf].into_iter().find(|e| e.label() == v),
             _ => {}
         }
     }

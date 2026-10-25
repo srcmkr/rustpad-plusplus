@@ -6,7 +6,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use gpui::{App, Font, FontFallbacks, Global, Hsla, Pixels, SharedString, px, rgb, rgba};
+use gpui::{App, Font, FontFallbacks, Global, Hsla, Pixels, SharedString, px, rgb, rgb_to_hsla, rgba};
 
 use crate::config::Config;
 
@@ -164,8 +164,8 @@ macro_rules! palette {
             $($name: u32,)*
             $($aname: u32,)*
         }
-        $(#[allow(dead_code)] pub fn $name() -> Hsla { rgb(scheme().$name).into() })*
-        $(#[allow(dead_code)] pub fn $aname() -> Hsla { rgba(scheme().$aname).into() })*
+        $(#[allow(dead_code)] pub fn $name() -> Hsla { rgb_to_hsla(rgb(scheme().$name)) })*
+        $(#[allow(dead_code)] pub fn $aname() -> Hsla { rgb_to_hsla(rgba(scheme().$aname)) })*
     };
 }
 
@@ -173,12 +173,15 @@ palette! {
     opaque {
         bg, bg_alt, bg_panel, bg_hover, bg_active, border, text, text_dim, text_faint, accent,
         gutter_text, gutter_active, cursor, syn_key, syn_string, syn_number, syn_keyword,
-        syn_punct, syn_heading, syn_offset, warn, error,
+        syn_punct, syn_heading, syn_offset, warn, error, primary, on_primary,
     }
-    alpha { selection, current_line, find_match, scrollbar_thumb, scrollbar_thumb_active, shadow, }
+    alpha {
+        selection, current_line, find_match, scrollbar_thumb, scrollbar_thumb_active, shadow,
+        glass, glass_border, control, control_hover, control_active,
+    }
 }
 
-pub static SCHEMES: [Scheme; 4] = [
+pub static SCHEMES: [Scheme; 5] = [
     Scheme {
         name: n_!("Dark"),
         dark: true,
@@ -204,12 +207,19 @@ pub static SCHEMES: [Scheme; 4] = [
         syn_offset: 0x7d8590,
         warn: 0xe5c07b,
         error: 0xf07178,
+        primary: 0x4c8dff,
+        on_primary: 0xffffff,
         selection: 0x2f65caaa,
         current_line: 0xffffff0a,
         find_match: 0xe5c07b55,
         scrollbar_thumb: 0xffffff30,
         scrollbar_thumb_active: 0xffffff55,
         shadow: 0x00000080,
+        glass: 0x2b2d30eb,
+        glass_border: 0xffffff17,
+        control: 0xffffff0d,
+        control_hover: 0xffffff17,
+        control_active: 0xffffff21,
     },
     Scheme {
         name: n_!("Light"),
@@ -236,12 +246,19 @@ pub static SCHEMES: [Scheme; 4] = [
         syn_offset: 0x8a8f98,
         warn: 0xb26b00,
         error: 0xc62828,
+        primary: 0x2f6fe0,
+        on_primary: 0xffffff,
         selection: 0x3d7eff40,
         current_line: 0x0000000a,
         find_match: 0xffd33d66,
         scrollbar_thumb: 0x00000030,
         scrollbar_thumb_active: 0x00000055,
         shadow: 0x00000040,
+        glass: 0xfafafaeb,
+        glass_border: 0x0000001a,
+        control: 0x0000000a,
+        control_hover: 0x00000012,
+        control_active: 0x0000001c,
     },
     Scheme {
         name: "Monokai",
@@ -268,12 +285,19 @@ pub static SCHEMES: [Scheme; 4] = [
         syn_offset: 0x8f8b77,
         warn: 0xfd971f,
         error: 0xf92672,
+        primary: 0xa6e22e,
+        on_primary: 0x1e1f1c,
         selection: 0x49483ecc,
         current_line: 0xffffff0c,
         find_match: 0xe6db7455,
         scrollbar_thumb: 0xffffff30,
         scrollbar_thumb_active: 0xffffff55,
         shadow: 0x00000080,
+        glass: 0x3a3b33eb,
+        glass_border: 0xffffff17,
+        control: 0xffffff0d,
+        control_hover: 0xffffff17,
+        control_active: 0xffffff21,
     },
     Scheme {
         name: "Solarized Dark",
@@ -300,12 +324,58 @@ pub static SCHEMES: [Scheme; 4] = [
         syn_offset: 0x657b83,
         warn: 0xb58900,
         error: 0xdc322f,
+        primary: 0x268bd2,
+        on_primary: 0xffffff,
         selection: 0x268bd255,
         current_line: 0xffffff0a,
         find_match: 0xb5890066,
         scrollbar_thumb: 0xffffff30,
         scrollbar_thumb_active: 0xffffff55,
         shadow: 0x00000080,
+        glass: 0x0a3c48eb,
+        glass_border: 0xffffff17,
+        control: 0xffffff0d,
+        control_hover: 0xffffff17,
+        control_active: 0xffffff21,
+    },
+    Scheme {
+        name: "Aurora",
+        dark: true,
+        bg: 0x111114,
+        bg_alt: 0x0a0a0c,
+        bg_panel: 0x161618,
+        bg_hover: 0x26262b,
+        bg_active: 0x2e2e34,
+        border: 0x1c1c20,
+        text: 0xf2f2f4,
+        text_dim: 0xa1a1aa,
+        text_faint: 0x6b6b74,
+        accent: 0x3b82f6,
+        gutter_text: 0x4a4a52,
+        gutter_active: 0xa1a1aa,
+        cursor: 0xf2f2f4,
+        syn_key: 0xa78bfa,
+        syn_string: 0x5eead4,
+        syn_number: 0x93c5fd,
+        syn_keyword: 0x818cf8,
+        syn_punct: 0x71717a,
+        syn_heading: 0xa78bfa,
+        syn_offset: 0x6b6b74,
+        warn: 0xfbbf24,
+        error: 0xf87171,
+        primary: 0xf2f2f4,
+        on_primary: 0x0a0a0c,
+        selection: 0x4f46e566,
+        current_line: 0xffffff08,
+        find_match: 0xfbbf2440,
+        scrollbar_thumb: 0xffffff26,
+        scrollbar_thumb_active: 0xffffff45,
+        shadow: 0x000000a0,
+        glass: 0x1e1e22e0,
+        glass_border: 0xffffff1a,
+        control: 0xffffff14,
+        control_hover: 0xffffff1f,
+        control_active: 0xffffff24,
     },
 ];
 
@@ -323,10 +393,6 @@ pub fn set_scheme(i: usize) {
     CURRENT.store(i.min(SCHEMES.len() - 1), Ordering::Relaxed);
 }
 
-/// Text color on top of `accent()`.
-pub fn on_accent() -> Hsla {
-    if scheme().dark && scheme().name == "Monokai" { rgb(0x1e1f1c).into() } else { rgb(0xffffff).into() }
-}
 
 impl Scheme {
     /// Background plus three sample colors for scheme previews.

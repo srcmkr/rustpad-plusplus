@@ -12,7 +12,9 @@ use gpui::{
 };
 
 use super::{BarKind, Dialog, Workspace};
+use crate::doc::buffer::LineEnding;
 use crate::theme::{self, SCHEMES, Settings};
+use crate::ui;
 use crate::views::ViewMode;
 use crate::views::text as editor;
 
@@ -120,6 +122,17 @@ impl Workspace {
 
         let text_mode = mode == ViewMode::Text;
         let buffer = self.tab().buffer.read(cx);
+        // Converting the line endings of a binary file would break it.
+        let is_text = self.tab().kind != crate::doc::detect::Kind::Binary;
+        let eol = buffer.line_ending;
+        let eol_item = |to: LineEnding, label: &'static str| Item::Action {
+            label: label.into(),
+            shortcut: None,
+            checked: Some(eol == to),
+            enabled: is_text,
+            run: Rc::new(move |ws, w, cx| ws.convert_line_endings(to, w, cx)),
+        };
+        let line_endings = vec![eol_item(LineEnding::CrLf, tr!("Windows (CRLF)")), eol_item(LineEnding::Lf, tr!("Linux, macOS (LF)"))];
         let has_sel = text_mode && !self.tab().text.read(cx).selection().is_empty();
         let (can_undo, can_redo) = (text_mode && buffer.can_undo(), text_mode && buffer.can_redo());
 
@@ -159,6 +172,7 @@ impl Workspace {
                     Item::Sep,
                     dispatch(tr!("Duplicate Line"), "Ctrl+D", text_mode, editor::DuplicateLine),
                     dispatch(tr!("Delete Line"), "Ctrl+Shift+L", text_mode, editor::DeleteLine),
+                    Item::Sub { label: tr!("Line Endings").into(), items: line_endings },
                     Item::Sep,
                     action(tr!("Find…"), Some("Ctrl+F"), |ws, w, cx| ws.open_bar(BarKind::Find, w, cx)),
                     action(tr!("Find Next"), Some("F3"), |ws, w, cx| ws.find(true, w, cx)),
@@ -204,10 +218,12 @@ impl Workspace {
     }
 
     pub(super) fn close_menu(&mut self, cx: &mut Context<Self>) {
-        if self.menu.is_some() || self.encoding_menu {
+        if self.menu.is_some() || self.encoding_menu || self.eol_menu || self.tab_list {
             self.menu = None;
             self.submenu = None;
             self.encoding_menu = false;
+            self.eol_menu = false;
+            self.tab_list = false;
             cx.notify();
         }
     }
@@ -228,13 +244,13 @@ impl Workspace {
             let mut label = div()
                 .id(("menu", i))
                 .relative()
-                .h_full()
+                .h(px(BAR_H - 4.))
                 .px_3()
                 .flex()
                 .items_center()
-                .rounded_sm()
-                .when(open, |d| d.bg(theme::bg_active()))
-                .when(!open, |d| d.hover(|s| s.bg(theme::bg_hover())))
+                .rounded_full()
+                .when(open, |d| d.bg(theme::control_active()))
+                .when(!open, |d| d.hover(|s| s.bg(theme::control_hover())))
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |ws, _, _, cx| {
@@ -260,11 +276,11 @@ impl Workspace {
                     deferred(
                         div()
                             .absolute()
-                            .top(px(BAR_H))
+                            .top(px(BAR_H - 2.))
                             .left_0()
                             .child(self.render_dropdown(menu.items, false, cx)),
                     )
-                    .with_priority(1),
+                    .priority(1),
                 );
             }
             bar = bar.child(label);
@@ -273,23 +289,17 @@ impl Workspace {
     }
 
     fn render_dropdown(&self, items: Vec<Item>, nested: bool, cx: &mut Context<Self>) -> AnyElement {
-        let mut list = div()
+        let mut list = ui::popover()
             .id("dropdown")
             .occlude()
             .flex()
             .flex_col()
             .min_w(px(260.))
-            .py_1()
-            .bg(theme::bg_panel())
-            .border_1()
-            .border_color(theme::border())
-            .rounded_md()
-            .shadow_lg()
             .text_size(px(13.))
             .text_color(theme::text());
         for (idx, item) in items.into_iter().enumerate() {
             list = list.child(match item {
-                Item::Sep => div().my_1().h(px(1.)).bg(theme::border()).into_any_element(),
+                Item::Sep => ui::separator().into_any_element(),
                 Item::Action { label, shortcut, checked, enabled, run } => {
                     let row = Self::row(idx, checked, label, shortcut.map(|s| shortcut_label(s).into()), enabled)
                         .on_hover(cx.listener(move |ws, hovered: &bool, _, cx| {
@@ -314,7 +324,7 @@ impl Workspace {
                     let key = label.clone();
                     let mut row = Self::row(idx, None, label, Some("▸".into()), true)
                         .relative()
-                        .when(open, |d| d.bg(theme::bg_hover()))
+                        .when(open, |d| d.bg(theme::control_hover()))
                         .on_hover(cx.listener(move |ws, hovered: &bool, _, cx| {
                             if *hovered && ws.submenu.as_ref() != Some(&key) {
                                 ws.submenu = Some(key.clone());
@@ -323,7 +333,7 @@ impl Workspace {
                         }));
                     if open {
                         row = row.child(
-                            div().absolute().top(px(-5.)).left(relative(1.)).child(self.render_dropdown(items, true, cx)),
+                            div().absolute().top(px(-ui::POPOVER_PAD - 1.)).left(relative(1.)).pl(px(ui::POPOVER_PAD)).child(self.render_dropdown(items, true, cx)),
                         );
                     }
                     row.into_any_element()
@@ -340,17 +350,12 @@ impl Workspace {
         trailing: Option<SharedString>,
         enabled: bool,
     ) -> gpui::Stateful<gpui::Div> {
-        div()
+        ui::row()
             .id(("item", idx))
-            .flex()
-            .flex_row()
-            .items_center()
-            .h(px(26.))
-            .mx_1()
+            .h(px(28.))
             .pl_1()
             .pr_3()
-            .rounded_sm()
-            .when(enabled, |d| d.hover(|s| s.bg(theme::bg_hover())))
+            .when(enabled, |d| d.hover(|s| s.bg(theme::control_hover())))
             .when(!enabled, |d| d.text_color(theme::text_faint()))
             .child(
                 div()

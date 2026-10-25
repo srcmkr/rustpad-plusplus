@@ -11,7 +11,7 @@ and, if it is about a file, its size and encoding (shown in the status bar).
 
 ## Building from source
 
-You need [Rust](https://rustup.rs/) 1.90 or newer and a few libraries. On
+You need [Rust](https://rustup.rs/) 1.95 or newer and a few libraries. On
 Debian, Ubuntu and Linux Mint:
 
 ```sh
@@ -38,6 +38,11 @@ cargo test --workspace
 cargo clippy --workspace --all-targets
 ```
 
+After changing dependencies, also run `cargo deny check` (install it with
+`cargo install --locked cargo-deny`). It checks for known vulnerabilities,
+licenses and sources as configured in [`deny.toml`](deny.toml); CI runs it
+on every push, and a release waits for it.
+
 ## Translations
 
 Texts are gettext catalogs in [`po/`](po): English is written in the code,
@@ -47,6 +52,11 @@ translate it (Poedit, Weblate or any text editor) and add it to `CATALOGS` in
 [`src/i18n.rs`](src/i18n.rs). `cargo test` fails while a catalog misses a
 text or keeps one the code no longer has; after changing texts in the code,
 regenerate the template with `cargo test -- --ignored write_pot`.
+
+The Spanish, French, Italian and Brazilian Portuguese catalogs are drafts
+that no native speaker has reviewed yet (their first line says so). A review
+of one of them, even of a few strings, is a very welcome contribution; once a
+catalog is reviewed, drop the note from its first line.
 
 ## Where things are
 

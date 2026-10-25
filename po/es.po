@@ -1,0 +1,831 @@
+# Spanish translation of rustpad++. Draft, not yet reviewed by a native speaker.
+msgid ""
+msgstr ""
+"Project-Id-Version: rustpad++\n"
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/workspace.rs:1124
+msgid "  value {value} ({hex})"
+msgstr "  valor {value} ({hex})"
+
+#: src/workspace.rs:2245
+msgid " Reloading discards your unsaved changes."
+msgstr " Al recargar se descartan los cambios sin guardar."
+
+#: src/menu.rs:200
+msgid "About rustpad++"
+msgstr "Acerca de rustpad++"
+
+#: src/menu.rs:190
+msgid "All Settings…"
+msgstr "Todas las preferencias…"
+
+#: src/settings_window.rs:470
+msgid "Also with Ctrl + / Ctrl − / Ctrl 0"
+msgstr "También con Ctrl + / Ctrl − / Ctrl 0"
+
+#: src/settings_window.rs:15
+msgid "Appearance"
+msgstr "Apariencia"
+
+#: src/settings_window.rs:357
+msgid "Applies immediately to all windows"
+msgstr "Se aplica de inmediato a todas las ventanas"
+
+#: src/settings_window.rs:416
+msgid "Asks GitHub for a newer version 30 seconds after the start and every 6 hours. GitHub sees your IP address, nothing else."
+msgstr "Consulta en GitHub si hay una versión más reciente 30 segundos después del inicio y cada 6 horas. GitHub solo ve tu dirección IP, nada más."
+
+#: src/workspace.rs:1910
+msgid "Author"
+msgstr "Autor"
+
+#: src/i18n.rs:67
+msgid "Automatic (system language)"
+msgstr "Automático (idioma del sistema)"
+
+#: src/workspace.rs:1160
+msgid "Binary"
+msgstr "Binario"
+
+#: src/workspace.rs:1912
+msgid "Built with"
+msgstr "Hecho con"
+
+#: src/workspace.rs:581 src/workspace.rs:664 src/workspace.rs:1332
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: src/workspace.rs:1386
+msgid "Cannot convert to {encoding}: “{char}” does not exist there"
+msgstr "No se puede convertir a {encoding}: “{char}” no existe en esa codificación"
+
+#: src/workspace.rs:270
+msgid "Cannot open {path}: {error}"
+msgstr "No se puede abrir {path}: {error}"
+
+#: src/workspace.rs:1901
+msgid "Changelog"
+msgstr "Registro de cambios"
+
+#: src/workspace.rs:1695
+msgid "Check for Updates"
+msgstr "Buscar actualizaciones"
+
+#: src/menu.rs:196
+msgid "Check for Updates…"
+msgstr "Buscar actualizaciones…"
+
+#: src/settings_window.rs:415
+msgid "Check for updates"
+msgstr "Buscar actualizaciones"
+
+#: src/workspace.rs:1670
+msgid "Check now"
+msgstr "Comprobar ahora"
+
+#: src/update.rs:172
+msgid "Checking…"
+msgstr "Comprobando…"
+
+#: src/update.rs:176
+msgid "Checks shortly after the start."
+msgstr "Se comprueba poco después del inicio."
+
+#: src/settings_window.rs:382
+msgid "Clear ({count})"
+msgstr "Vaciar ({count})"
+
+#: src/menu.rs:109
+msgid "Clear List"
+msgstr "Vaciar lista"
+
+#: src/menu.rs:187
+msgid "Color Scheme"
+msgstr "Esquema de color"
+
+#: src/settings_window.rs:570
+msgid "Color scheme"
+msgstr "Esquema de color"
+
+#: src/workspace.rs:1295
+msgid "Convert to"
+msgstr "Convertir a"
+
+#: src/menu.rs:155
+msgid "Copy"
+msgstr "Copiar"
+
+#: src/settings_window.rs:230
+msgid "Could not change the default application: {error}"
+msgstr "No se pudo cambiar la aplicación predeterminada: {error}"
+
+#: src/update.rs:174
+msgid "Could not check for updates."
+msgstr "No se pudo buscar actualizaciones."
+
+#: src/menu.rs:64
+msgid "Ctrl"
+msgstr "Ctrl"
+
+#: src/menu.rs:154
+msgid "Cut"
+msgstr "Cortar"
+
+#: src/theme.rs:183
+msgid "Dark"
+msgstr "Oscuro"
+
+#: src/workspace.rs:1720
+msgid "Debug build"
+msgstr "Compilación de depuración"
+
+#: src/settings_window.rs:483
+msgid "Default"
+msgstr "Predeterminado"
+
+#: src/settings_window.rs:195
+msgid "Default application"
+msgstr "Aplicación predeterminada"
+
+#: src/menu.rs:66
+msgid "Del"
+msgstr "Supr"
+
+#: src/menu.rs:157
+msgid "Delete"
+msgstr "Eliminar"
+
+#: src/menu.rs:161
+msgid "Delete Line"
+msgstr "Eliminar línea"
+
+#: src/workspace.rs:581
+msgid "Discard"
+msgstr "Descartar"
+
+#: src/workspace.rs:833
+msgid "Document changed while searching - nothing replaced"
+msgstr "El documento cambió durante la búsqueda - no se reemplazó nada"
+
+#: src/settings_window.rs:403 src/workspace.rs:1635 src/workspace.rs:1680
+msgid "Download"
+msgstr "Descargar"
+
+#: src/menu.rs:160
+msgid "Duplicate Line"
+msgstr "Duplicar línea"
+
+#: src/menu.rs:149
+msgid "Edit"
+msgstr "Editar"
+
+#: src/settings_window.rs:15
+msgid "Editor"
+msgstr "Editor"
+
+#: src/settings_window.rs:494
+msgid "Editor display"
+msgstr "Visualización del editor"
+
+#: src/views/csv.rs:489 src/views/json.rs:584
+msgid "Empty document"
+msgstr "Documento vacío"
+
+#: src/workspace.rs:1041
+msgid "Enter / F3: next   Shift+F3: previous   Esc: close"
+msgstr "Intro / F3: siguiente   Mayús+F3: anterior   Esc: cerrar"
+
+#: src/workspace.rs:883
+msgid "Enter a line number, 0x<hex offset> or <percent>%"
+msgstr "Introduce un número de línea, 0x<desplazamiento hex> o <porcentaje>%"
+
+#: src/workspace.rs:1108
+msgid "Enter: replace and find next"
+msgstr "Intro: reemplazar y buscar siguiente"
+
+#: src/menu.rs:135
+msgid "File"
+msgstr "Archivo"
+
+#: src/settings_window.rs:15
+msgid "File Types"
+msgstr "Tipos de archivo"
+
+#: src/settings_window.rs:199
+msgid "Files of these types open in rustpad++ when you double-click them in the file manager."
+msgstr "Los archivos de estos tipos se abren en rustpad++ al hacer doble clic en ellos en el gestor de archivos."
+
+#: src/workspace.rs:1041
+msgid "Find"
+msgstr "Buscar"
+
+#: src/menu.rs:164
+msgid "Find Next"
+msgstr "Buscar siguiente"
+
+#: src/menu.rs:165
+msgid "Find Previous"
+msgstr "Buscar anterior"
+
+#: src/menu.rs:166
+msgid "Find and Replace…"
+msgstr "Buscar y reemplazar…"
+
+#: src/menu.rs:163
+msgid "Find…"
+msgstr "Buscar…"
+
+#: src/menu.rs:181
+msgid "Follow End of File (tail -f)"
+msgstr "Seguir el final del archivo (tail -f)"
+
+#: src/workspace.rs:2294
+msgid "Follow end"
+msgstr "Seguir final"
+
+#: src/settings_window.rs:467
+msgid "Font"
+msgstr "Tipografía"
+
+#: src/settings_window.rs:488
+msgid "Font family"
+msgstr "Familia tipográfica"
+
+#: src/settings_window.rs:469
+msgid "Font size"
+msgstr "Tamaño de letra"
+
+#: src/settings_window.rs:369
+msgid "Further launches open files as tabs in the running window (fastest)"
+msgstr "Las siguientes ejecuciones abren los archivos como pestañas en la ventana abierta (lo más rápido)"
+
+#: src/settings_window.rs:15
+msgid "General"
+msgstr "General"
+
+#: src/menu.rs:168
+msgid "Go To…"
+msgstr "Ir a…"
+
+#: src/workspace.rs:1042
+msgid "Go to"
+msgstr "Ir a"
+
+#: src/menu.rs:194
+msgid "Help"
+msgstr "Ayuda"
+
+#: src/menu.rs:175 src/workspace.rs:1888
+msgid "Hex"
+msgstr "Hex"
+
+#: src/settings_window.rs:379
+msgid "History"
+msgstr "Historial"
+
+#: src/workspace.rs:2298
+msgid "Ignore"
+msgstr "Ignorar"
+
+#: src/workspace.rs:1935
+msgid "Inspired by Notepad++ by Don Ho."
+msgstr "Inspirado en Notepad++, de Don Ho."
+
+#: src/settings_window.rs:399 src/workspace.rs:1629 src/workspace.rs:1676
+msgid "Install"
+msgstr "Instalar"
+
+#: src/settings_window.rs:408 src/workspace.rs:1685
+msgid "Install for all users"
+msgstr "Instalar para todos los usuarios"
+
+#: src/workspace.rs:1696
+msgid "Installed version: {version}"
+msgstr "Versión instalada: {version}"
+
+#: src/update.rs:184
+msgid "Installing the update…"
+msgstr "Instalando la actualización…"
+
+#: src/menu.rs:176 src/workspace.rs:1889
+msgid "JSON Tree"
+msgstr "Árbol JSON"
+
+#: src/settings_window.rs:374
+msgid "Keep all tabs including unsaved changes on quit, without asking"
+msgstr "Al salir, conservar todas las pestañas con sus cambios sin guardar, sin preguntar"
+
+#: src/settings_window.rs:355
+msgid "Language"
+msgstr "Idioma"
+
+#: src/views/markdown.rs:711
+msgid "Large document: only the first 16 MiB are rendered."
+msgstr "Documento grande: solo se representan los primeros 16 MiB."
+
+#: src/views/csv.rs:396
+msgid "Large document: only the first 16 MiB are shown."
+msgstr "Documento grande: solo se muestran los primeros 16 MiB."
+
+#: src/workspace.rs:1863
+msgid "Less editor. More text. Fast."
+msgstr "Menos editor. Más texto. Rápido."
+
+#: src/theme.rs:215
+msgid "Light"
+msgstr "Claro"
+
+#: src/menu.rs:175
+msgid "Line Endings"
+msgstr "Finales de línea"
+
+#: src/settings_window.rs:510
+msgid "Line numbers"
+msgstr "Números de línea"
+
+#: src/workspace.rs:875
+msgid "Line {line} not indexed yet ({pct}% scanned) - try 0x<offset> or <n>%"
+msgstr "La línea {line} aún no está indexada ({pct}% analizado) - prueba 0x<desplazamiento> o <n>%"
+
+#: src/menu.rs:135 src/workspace.rs:1401
+msgid "Linux, macOS (LF)"
+msgstr "Linux, macOS (LF)"
+
+#: src/workspace.rs:1135
+msgid "Ln {line}, Col {column}"
+msgstr "Lín {line}, Col {column}"
+
+#: src/file_types.rs:23
+msgid "Log files"
+msgstr "Archivos de registro"
+
+#: src/menu.rs:177 src/workspace.rs:1890
+msgid "Markdown"
+msgstr "Markdown"
+
+#: src/workspace.rs:1201
+msgid "Match case"
+msgstr "Mayúsculas"
+
+#: src/menu.rs:137
+msgid "New File"
+msgstr "Archivo nuevo"
+
+#: src/menu.rs:105
+msgid "No Entries"
+msgstr "Sin entradas"
+
+#: src/workspace.rs:1869
+msgid "No clutter, no waiting - just your file."
+msgstr "Sin estorbos ni esperas - solo tu archivo."
+
+#: src/settings_window.rs:381
+msgid "No entries"
+msgstr "Sin entradas"
+
+#: src/update.rs:188
+msgid "No password prompt is available here. Run this in a terminal:"
+msgstr "Aquí no se puede pedir la contraseña. Ejecuta esto en una terminal:"
+
+#: src/update.rs:185
+msgid "Not allowed, or wrong password."
+msgstr "No autorizado o contraseña incorrecta."
+
+#: src/update.rs:175
+msgid "Not checked: the check is switched off."
+msgstr "Sin comprobar: la comprobación está desactivada."
+
+#: src/workspace.rs:831 src/workspace.rs:966
+msgid "Not found"
+msgstr "No encontrado"
+
+#: src/workspace.rs:1125
+msgid "Offset {hex} ({offset}){byte}"
+msgstr "Desplazamiento {hex} ({offset}){byte}"
+
+#: src/menu.rs:138
+msgid "Open File…"
+msgstr "Abrir archivo…"
+
+#: src/menu.rs:156
+msgid "Paste"
+msgstr "Pegar"
+
+#: src/workspace.rs:1139
+msgid "Pos {offset}"
+msgstr "Pos {offset}"
+
+#: src/menu.rs:145 src/workspace.rs:664
+msgid "Quit"
+msgstr "Salir"
+
+#: src/workspace.rs:663
+msgid "Quit anyway? The changes will be lost."
+msgstr "¿Salir de todos modos? Se perderán los cambios."
+
+#: src/views/csv.rs:394
+msgid "Reading table…"
+msgstr "Leyendo la tabla…"
+
+#: src/menu.rs:139
+msgid "Recent Files"
+msgstr "Archivos recientes"
+
+#: src/settings_window.rs:380
+msgid "Recent files"
+msgstr "Archivos recientes"
+
+#: src/menu.rs:152
+msgid "Redo"
+msgstr "Rehacer"
+
+#: src/workspace.rs:1720
+msgid "Release build"
+msgstr "Compilación de lanzamiento"
+
+#: src/workspace.rs:2290
+msgid "Reload"
+msgstr "Recargar"
+
+#: src/workspace.rs:1360 src/workspace.rs:2212
+msgid "Reload failed: {error}"
+msgstr "Error al recargar: {error}"
+
+#: src/views/markdown.rs:709
+msgid "Rendering Markdown…"
+msgstr "Representando Markdown…"
+
+#: src/workspace.rs:1332
+msgid "Reopen"
+msgstr "Reabrir"
+
+#: src/workspace.rs:1283
+msgid "Reopen with encoding"
+msgstr "Reabrir con codificación"
+
+#: src/workspace.rs:1330
+msgid "Reopen {name} as {encoding}?"
+msgstr "¿Reabrir {name} como {encoding}?"
+
+#: src/workspace.rs:1098 src/workspace.rs:1101
+msgid "Replace"
+msgstr "Reemplazar"
+
+#: src/workspace.rs:1105
+msgid "Replace all"
+msgstr "Reemplazar todo"
+
+#: src/workspace.rs:836
+msgid "Replaced {n} occurrence"
+msgid_plural "Replaced {n} occurrences"
+msgstr[0] "{n} coincidencia reemplazada"
+msgstr[1] "{n} coincidencias reemplazadas"
+
+#: src/workspace.rs:843
+msgid "Replacing"
+msgstr "Reemplazando"
+
+#: src/workspace.rs:1899
+msgid "Report a bug"
+msgstr "Informar de un error"
+
+#: src/workspace.rs:1911
+msgid "Repository"
+msgstr "Repositorio"
+
+#: src/settings_window.rs:373
+msgid "Restore session"
+msgstr "Restaurar sesión"
+
+#: src/workspace.rs:1912
+msgid "Rust and GPUI Community Edition"
+msgstr "Rust y GPUI Community Edition"
+
+#: src/menu.rs:141 src/workspace.rs:581
+msgid "Save"
+msgstr "Guardar"
+
+#: src/menu.rs:143
+msgid "Save All"
+msgstr "Guardar todo"
+
+#: src/menu.rs:142
+msgid "Save As…"
+msgstr "Guardar como…"
+
+#: src/workspace.rs:579
+msgid "Save changes to {name}?"
+msgstr "¿Guardar los cambios en {name}?"
+
+#: src/workspace.rs:559
+msgid "Save failed: {error}"
+msgstr "Error al guardar: {error}"
+
+#: src/workspace.rs:556
+msgid "Saved {path}"
+msgstr "{path} guardado"
+
+#: src/workspace.rs:566
+msgid "Saving"
+msgstr "Guardando"
+
+#: src/workspace.rs:963
+msgid "Search wrapped around"
+msgstr "La búsqueda dio la vuelta"
+
+#: src/workspace.rs:972
+msgid "Searching"
+msgstr "Buscando"
+
+#: src/workspace.rs:1137
+msgid "Sel {n} byte"
+msgid_plural "Sel {n} bytes"
+msgstr[0] "Sel {n} byte"
+msgstr[1] "Sel {n} bytes"
+
+#: src/menu.rs:158
+msgid "Select All"
+msgstr "Seleccionar todo"
+
+#: src/views/text.rs:710
+msgid "Selection too large for the clipboard (max 64 MiB)"
+msgstr "Selección demasiado grande para el portapapeles (máx. 64 MiB)"
+
+#: src/menu.rs:185 src/workspace.rs:1913
+msgid "Settings"
+msgstr "Preferencias"
+
+#: src/placement.rs:19 src/settings_window.rs:43 src/settings_window.rs:56 src/settings_window.rs:360
+msgid "Settings - rustpad++"
+msgstr "Preferencias - rustpad++"
+
+#: src/file_types.rs:30
+msgid "Shell scripts"
+msgstr "Scripts de shell"
+
+#: src/menu.rs:65
+msgid "Shift"
+msgstr "Mayús"
+
+#: src/settings_window.rs:572
+msgid "Show status bar"
+msgstr "Mostrar barra de estado"
+
+#: src/settings_window.rs:368
+msgid "Single window"
+msgstr "Una sola ventana"
+
+#: src/workspace.rs:1655
+msgid "Skip this version"
+msgstr "Omitir esta versión"
+
+#: src/workspace.rs:1898
+msgid "Source code"
+msgstr "Código fuente"
+
+#: src/settings_window.rs:366
+msgid "Startup"
+msgstr "Inicio"
+
+#: src/menu.rs:188
+msgid "Status Bar"
+msgstr "Barra de estado"
+
+#: src/settings_window.rs:496
+msgid "Tab width"
+msgstr "Ancho de tabulación"
+
+#: src/menu.rs:178 src/workspace.rs:1891
+msgid "Table"
+msgstr "Tabla"
+
+#: src/menu.rs:174 src/workspace.rs:1887
+msgid "Text"
+msgstr "Texto"
+
+#: src/file_types.rs:22
+msgid "Text files"
+msgstr "Archivos de texto"
+
+#: src/workspace.rs:1939
+msgid "Thanks for more than 20 years of a great example."
+msgstr "Gracias por más de 20 años de un gran ejemplo."
+
+#: src/update.rs:186
+msgid "The update did not work: {error}"
+msgstr "La actualización no funcionó: {error}"
+
+#: src/settings_window.rs:449 src/workspace.rs:1709
+msgid "This rustpad++ runs from its build folder. Installed for all users, it gets a menu entry and can update itself."
+msgstr "Este rustpad++ se ejecuta desde su carpeta de compilación. Instalado para todos los usuarios, obtiene una entrada en el menú y puede actualizarse solo."
+
+#: src/menu.rs:151
+msgid "Undo"
+msgstr "Deshacer"
+
+#: src/workspace.rs:2027
+msgid "Unsaved changes to {name} not restored ({why}) - the backup is in ~/.local/state/rustpad/backup"
+msgstr "No se restauraron los cambios sin guardar de {name} ({why}) - la copia de seguridad está en ~/.local/state/rustpad/backup"
+
+#: src/settings_window.rs:381
+msgid "Up to 5 files in the File menu"
+msgstr "Hasta 5 archivos en el menú Archivo"
+
+#: src/settings_window.rs:413
+msgid "Updates"
+msgstr "Actualizaciones"
+
+#: src/settings_window.rs:356
+msgid "User interface"
+msgstr "Interfaz de usuario"
+
+#: src/settings_window.rs:441 src/workspace.rs:1848
+msgid "Version {version}"
+msgstr "Versión {version}"
+
+#: src/update.rs:171
+msgid "Version {version} is available."
+msgstr "La versión {version} está disponible."
+
+#: src/menu.rs:172
+msgid "View"
+msgstr "Ver"
+
+#: src/workspace.rs:1653
+msgid "What's new?"
+msgstr "¿Qué hay de nuevo?"
+
+#: src/workspace.rs:1202
+msgid "Whole word"
+msgstr "Palabra completa"
+
+#: src/workspace.rs:1394
+msgid "Will be saved as {encoding}"
+msgstr "Se guardará como {encoding}"
+
+#: src/workspace.rs:1579
+msgid "Will be saved with {line_endings} line endings"
+msgstr "Se guardará con finales de línea {line_endings}"
+
+#: src/settings_window.rs:571
+msgid "Window"
+msgstr "Ventana"
+
+#: src/menu.rs:135 src/workspace.rs:1400
+msgid "Windows (CRLF)"
+msgstr "Windows (CRLF)"
+
+#: src/menu.rs:180
+msgid "Word Wrap"
+msgstr "Ajuste de línea"
+
+#: src/settings_window.rs:515
+msgid "Word wrap"
+msgstr "Ajuste de línea"
+
+#: src/settings_window.rs:516
+msgid "Wrap long lines at the window width instead of scrolling sideways"
+msgstr "Ajustar las líneas largas al ancho de la ventana en lugar de desplazarse lateralmente"
+
+#: src/workspace.rs:1331
+msgid "Your unsaved changes will be lost."
+msgstr "Se perderán los cambios sin guardar."
+
+#: src/views/json.rs:934
+msgid "document "
+msgstr "documento "
+
+#: src/workspace.rs:1155
+msgid "following end of file"
+msgstr "siguiendo el final del archivo"
+
+#: src/workspace.rs:1151
+msgid "indexing lines {pct}%"
+msgstr "indexando líneas {pct}%"
+
+#: src/views/json.rs:1023
+msgid "item"
+msgid_plural "items"
+msgstr[0] "elemento"
+msgstr[1] "elementos"
+
+#: src/views/json.rs:1021
+msgid "key"
+msgid_plural "keys"
+msgstr[0] "clave"
+msgstr[1] "claves"
+
+#: src/workspace.rs:1042
+msgid "line number, 0x<offset> or <percent>%"
+msgstr "número de línea, 0x<desplazamiento> o <porcentaje>%"
+
+#: src/views/json.rs:946
+msgid "line {line}"
+msgstr "línea {line}"
+
+#: src/update.rs:173
+msgid "rustpad++ is up to date."
+msgstr "rustpad++ está actualizado."
+
+#: src/workspace.rs:1626
+msgid "rustpad++ {version} is available."
+msgstr "rustpad++ {version} está disponible."
+
+#: src/views/json.rs:982
+msgid "scanning…"
+msgstr "analizando…"
+
+#: src/views/json.rs:983
+msgid "scanning… ({count} loaded)"
+msgstr "analizando… ({count} cargados)"
+
+#: src/doc/buffer.rs:870
+msgid "the character “{char}” cannot be saved as {encoding}"
+msgstr "el carácter “{char}” no se puede guardar como {encoding}"
+
+#: src/workspace.rs:2023
+msgid "the file was changed externally"
+msgstr "el archivo se modificó externamente"
+
+#: src/doc/buffer.rs:219
+msgid "too large to open as {encoding} (at most {max})"
+msgstr "demasiado grande para abrirlo como {encoding} (como máximo {max})"
+
+#: src/views/json.rs:1022
+msgid "value"
+msgid_plural "values"
+msgstr[0] "valor"
+msgstr[1] "valores"
+
+#: src/workspace.rs:1416
+msgid "{encoding} with BOM"
+msgstr "{encoding} con BOM"
+
+#: src/settings_window.rs:208
+msgid "{extensions} · checking…"
+msgstr "{extensions} · comprobando…"
+
+#: src/settings_window.rs:209
+msgid "{extensions} · currently: {app}"
+msgstr "{extensions} · actualmente: {app}"
+
+#: src/settings_window.rs:210
+msgid "{extensions} · no default application"
+msgstr "{extensions} · sin aplicación predeterminada"
+
+#: src/workspace.rs:2171
+msgid "{name} was truncated externally and reloaded"
+msgstr "{name} se truncó externamente y se recargó"
+
+#: src/workspace.rs:662
+msgid "{n} document with unsaved changes."
+msgid_plural "{n} documents with unsaved changes."
+msgstr[0] "{n} documento con cambios sin guardar."
+msgstr[1] "{n} documentos con cambios sin guardar."
+
+#: src/workspace.rs:1150
+msgid "{n} line"
+msgid_plural "{n} lines"
+msgstr[0] "{n} línea"
+msgstr[1] "{n} líneas"
+
+#: src/workspace.rs:513
+msgid "{n} untitled file: please save it with “Save As”"
+msgid_plural "{n} untitled files: please save them one by one with “Save As”"
+msgstr[0] "{n} archivo sin título: guárdalo con “Guardar como”"
+msgstr[1] "{n} archivos sin título: guárdalos uno a uno con “Guardar como”"
+
+#: src/workspace.rs:263
+msgid "{path} is a directory"
+msgstr "{path} es una carpeta"
+
+#: src/workspace.rs:2247
+msgid "“{name}” has grown outside rustpad++.{lose}"
+msgstr "“{name}” ha crecido fuera de rustpad++.{lose}"
+
+#: src/workspace.rs:2248
+msgid "“{name}” was changed outside rustpad++.{lose}"
+msgstr "“{name}” se modificó fuera de rustpad++.{lose}"
+
+#: src/workspace.rs:2250
+msgid "“{name}” was deleted or moved. The content stays open; saving creates the file again."
+msgstr "“{name}” se eliminó o se movió. El contenido sigue abierto; al guardar se vuelve a crear el archivo."
+
+#: src/workspace.rs:2249
+msgid "“{name}” was overwritten outside rustpad++. Please reload.{lose}"
+msgstr "“{name}” se sobrescribió fuera de rustpad++. Recárgalo.{lose}"
+
+#: src/workspace.rs:2251
+msgid "“{name}” was truncated externally. Your changes are kept; parts beyond the new end of file are missing."
+msgstr "“{name}” se truncó externamente. Tus cambios se conservan; faltan las partes posteriores al nuevo final del archivo."
+
+#: src/views/json.rs:974
+msgid "… load more ({count} loaded)"
+msgstr "… cargar más ({count} cargados)"
+
+#: src/views/json.rs:589 src/views/json.rs:992
+msgid "⚠ invalid JSON at offset {offset}"
+msgstr "⚠ JSON no válido en el desplazamiento {offset}"

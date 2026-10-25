@@ -17,7 +17,13 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Embedded catalogs: language code, the language's own name, catalog.
-const CATALOGS: &[(&str, &str, &str)] = &[("de", "Deutsch", include_str!("../po/de.po"))];
+const CATALOGS: &[(&str, &str, &str)] = &[
+    ("de", "Deutsch", include_str!("../po/de.po")),
+    ("es", "Español", include_str!("../po/es.po")),
+    ("fr", "Français", include_str!("../po/fr.po")),
+    ("it", "Italiano", include_str!("../po/it.po")),
+    ("pt_BR", "Português (Brasil)", include_str!("../po/pt_BR.po")),
+];
 
 /// Translate a literal UI string; with `name = value` pairs, fill `{name}` placeholders.
 macro_rules! tr {
@@ -74,13 +80,19 @@ pub fn set_language(setting: &str) {
     CURRENT.store(pick(&wanted_languages(Some(setting))), Ordering::Relaxed);
 }
 
-/// First wanted language that is English or has a catalog.
+/// First wanted language that is English or has a catalog. A language
+/// without a region also takes a regional catalog ("pt" takes "pt_BR").
 fn pick(wanted: &[String]) -> usize {
     for w in wanted {
         if w == "en" {
             return ENGLISH;
         }
         if let Some(i) = CATALOGS.iter().position(|(code, _, _)| code == w) {
+            return i;
+        }
+        if !w.contains('_')
+            && let Some(i) = CATALOGS.iter().position(|(code, _, _)| code.split('_').next() == Some(w.as_str()))
+        {
             return i;
         }
     }
@@ -554,11 +566,15 @@ mod tests {
     #[test]
     fn language_from_environment() {
         assert_eq!(wanted_languages(Some("de_AT.UTF-8")), ["de_AT", "de"]);
-        assert_eq!(wanted_languages(Some("fr:de")), ["fr", "de"]);
+        assert_eq!(wanted_languages(Some("nl:de")), ["nl", "de"]);
         let de = CATALOGS.iter().position(|c| c.0 == "de").unwrap();
-        assert_eq!(pick(&wanted_languages(Some("fr:de"))), de);
+        assert_eq!(pick(&wanted_languages(Some("nl:de"))), de);
         // An earlier English preference wins over a later catalog.
         assert_eq!(pick(&wanted_languages(Some("en_GB:de"))), ENGLISH);
-        assert_eq!(pick(&wanted_languages(Some("fr"))), ENGLISH);
+        assert_eq!(pick(&wanted_languages(Some("nl"))), ENGLISH);
+        // Portuguese from Portugal falls back to the Brazilian catalog, before English.
+        let pt = CATALOGS.iter().position(|c| c.0 == "pt_BR").unwrap();
+        assert_eq!(pick(&wanted_languages(Some("pt_BR.UTF-8"))), pt);
+        assert_eq!(pick(&wanted_languages(Some("pt_PT:en"))), pt);
     }
 }

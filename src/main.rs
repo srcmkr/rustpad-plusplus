@@ -12,6 +12,7 @@ mod prompt;
 mod session;
 mod settings_window;
 mod theme;
+mod ui;
 mod update;
 mod views;
 mod workspace;
@@ -20,7 +21,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use gpui::{
-    App, AppContext, Application, Bounds, KeyBinding, TitlebarOptions, WindowBounds, WindowOptions,
+    App, AppContext, Bounds, KeyBinding, TitlebarOptions, WindowBounds, WindowOptions,
     px, size,
 };
 
@@ -85,8 +86,9 @@ fn main() {
         session::acquire();
     }
 
-    Application::new().with_assets(assets::Assets).run(move |cx: &mut App| {
+    gpui_platform::application().with_assets(assets::Assets).run(move |cx: &mut App| {
         cx.set_global(settings);
+        ui::init(cx);
         prompt::install(cx);
         bind_keys(cx);
         cx.on_action(|_: &Quit, cx| cx.quit());
@@ -141,7 +143,7 @@ fn main() {
                             for f in &files {
                                 ws.open_path(f, window, cx);
                             }
-                            window.activate_window();
+                            window.activate();
                         })
                         .ok();
                 }
