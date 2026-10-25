@@ -29,31 +29,75 @@ make it executable and start it.
 
 </div>
 
-## What it does
+## Why rustpad++
 
-- **Any file opens right away**, whatever its size: files are memory-mapped,
-  not loaded. A 1 TiB file is open at once, a 1.7 GiB log with 25 million lines
-  is usable while its lines are counted in the background, and the first frame
-  is on screen in under 300 ms.
-- **Five views of the same file**: text, hex, a JSON tree that reads huge
-  documents lazily, rendered Markdown and a sortable table for CSV.
-  <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>5</kbd> switch, <kbd>Ctrl</kbd>+<kbd>E</kbd> cycles.
-- **Editing without surprises**: find and replace, optionally matching case
-  and whole words (replace all is a single undo step), go to a line, a byte
-  offset or a percentage, word wrap, duplicate and delete lines.
-- **Never lose work**: on quit, all tabs come back including unsaved changes,
-  without asking. Changes are backed up every second, so even after a crash
-  only the last moments are missing; for large files only the changes are
-  stored.
-- **Keeps an eye on your files**: a growing log can be followed like
-  `tail -f`; files changed, replaced, truncated or deleted by other programs
-  are noticed and you decide what happens.
+- **Your work survives.** Close the window with unsaved changes and they are
+  all there next time, without a single "Save changes?" dialog. A backup is
+  written every second, so even a crash or power cut costs only the last
+  moments. Saving writes a new file and swaps it in, so an interrupted save
+  never leaves a half-written file behind.
+- **Fast, whatever the size.** The window is on screen in under 300 ms, a
+  file opened from the file manager is a new tab within milliseconds, and the
+  GPU draws every frame. Size does not slow it down: files are memory-mapped,
+  not loaded, so a 1 TiB file is open at once and a 1.7 GiB log with 25
+  million lines is usable while its lines are counted in the background.
+  Find, replace, save and the backups work in chunks, so none of them needs
+  the whole file in memory.
+- **One tool instead of five.** The same file as text, hex, a JSON tree, rendered
+  Markdown or a sortable CSV table, one keystroke apart. No switching between
+  an editor, `less`, `hexdump`, `jq` and a spreadsheet.
+- **The Notepad++ way of working, native on Linux.** Tabs, session restore,
+  encodings in the status bar, one window for everything: no Wine, no
+  Electron, a native Rust program drawn by the GPU.
+- **Built for logs.** Follow a growing file like `tail -f`, jump to a line, a
+  byte offset or a percentage, and get told when another program changes,
+  truncates or deletes the file.
+- **Quiet and trustworthy.** No telemetry, no account. The only network
+  access is the update check, which can be switched off; updates are signed,
+  and only a correctly signed one is installed.
+
+### Opening a 1 GiB log file
+
+| Editor | Text on screen | Fully loaded | Memory |
+|---|---|---|---|
+| **rustpad++ 0.4.0** | **0.3 s** | **0.5 s** | **39 MiB** |
+| GNOME Text Editor 46.3 | 0.45 s | about 8.5 min | 3.3 GiB |
+| Notepad Next 0.15 | 1.8 s | 1.8 s | 2.1 GiB |
+| Kate 23.08 | 3.6 s | 3.7 s | 3.5 GiB |
+| Sublime Text 4215 | 7.2 s | 7.2 s | 1.4 GiB |
+
+Measured on one machine (Linux Mint 22.3, X11, Core Ultra 9 285K, RTX 4090)
+with the file already in the page cache; "fully loaded" means the editor's
+CPU use has settled, for rustpad++ that is when all 11.5 million lines are
+counted. "Memory" is the program's own memory, without the file's pages
+that the system caches anyway. With a small file, all of these editors are
+on screen in 0.2 to 0.6 s, rustpad++ in about 0.27 s.
+
+## Features
+
+- **Five views**: text, hex, a JSON tree that reads huge documents lazily,
+  rendered Markdown and a table for CSV and TSV (sort by column, resize
+  columns, jump from a row to the text). <kbd>Ctrl</kbd>+<kbd>1</kbd> to
+  <kbd>5</kbd> switch, <kbd>Ctrl</kbd>+<kbd>E</kbd> cycles.
+- **Editing**: find and replace, optionally matching case (also beyond ASCII,
+  "ß" and "ẞ") and whole words; replace all is a single undo step. Go to
+  line, byte offset or percentage, word wrap, duplicate and delete lines,
+  zoom with <kbd>Ctrl</kbd>+mouse wheel.
 - **Encodings and line endings**: UTF-8 with or without BOM, UTF-16,
   Windows-1252, ISO-8859-1 and -15 are detected; reopen a file in another
   encoding, or convert its encoding or line endings (LF, CRLF) from the
   status bar.
+- **Session**: on quit, all tabs come back including unsaved changes; for
+  large files only the changes are stored.
 - **One window**: opening more files from the file manager or the command line
-  adds tabs to the running window within milliseconds.
+  adds tabs to the running window within milliseconds; the tab bar scrolls
+  and lists all tabs when there are many.
+- **Six languages, five color schemes**: English, German, Spanish, French,
+  Italian and Brazilian Portuguese; Dark, Light, Monokai, Solarized Dark and
+  Aurora.
+
+Not there (yet): syntax highlighting, regular expressions in find, plugins,
+and builds for other systems than Linux on x86-64.
 
 <table>
   <tr>
@@ -101,12 +145,11 @@ Word wrap and following the end of a file are in the *View* menu; the
 encoding is changed by clicking it in the status bar. Settings live in
 `~/.config/rustpad/settings.conf`, the session in `~/.local/state/rustpad`.
 
-rustpad++ speaks English, German, Spanish, French, Italian and Brazilian
-Portuguese and follows the system language; it can also be set under
-*Settings → General*. The Spanish, French, Italian and Portuguese
-translations are new and not yet reviewed by native speakers: corrections
-are very welcome (see [CONTRIBUTING.md](CONTRIBUTING.md#translations)). Color schemes: Dark, Light, Monokai,
-Solarized Dark and Aurora.
+rustpad++ follows the system language; it can also be set under
+*Settings → General*, the color scheme under *Settings → Appearance*. The
+Spanish, French, Italian and Portuguese translations are new and not yet
+reviewed by native speakers: corrections are very welcome (see
+[CONTRIBUTING.md](CONTRIBUTING.md#translations)).
 
 ## How this project is built
 
