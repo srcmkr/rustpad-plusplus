@@ -1591,6 +1591,13 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     /// Returns whether the renderer supports subpixel (LCD) text antialiasing. macOS returns `false`.
     fn is_subpixel_rendering_supported(&self) -> bool;
 
+    /// Whether the window shows its first frame as soon as it is drawn, before the platform
+    /// asks for one. The X11 window does while it draws on the CPU.
+    #[doc(hidden)]
+    fn wants_early_present(&self) -> bool {
+        false
+    }
+
     // macOS specific methods
     /// Returns the window title. macOS and the Linux headless window override this. The default returns an empty string.
     fn get_title(&self) -> String {

@@ -86,6 +86,8 @@ fn main() {
         session::acquire();
     }
 
+    // The editor font and the UI font (see `ui::font`), prepared while the app starts.
+    gpui::set_startup_font_families([settings.mono_family.to_string(), "Inter".into()]);
     gpui_platform::application().with_assets(assets::Assets).run(move |cx: &mut App| {
         cx.set_global(settings);
         ui::init(cx);

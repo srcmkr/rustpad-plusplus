@@ -61,7 +61,10 @@ opt-level = 2
 [patch.crates-io]
 # Fixed COMPOUND_TEXT decoding: umlauts typed through ibus/XIM crashed the app.
 xim-ctext = { path = "patches/xim-ctext" }
-# Unchanged copies of GPUI and fontique, to be changed for a faster start.
+# A window on screen within a few dozen milliseconds: the first X11 window draws on the CPU
+# (with the renderer's own shader code) while its GPU device is created on another thread,
+# the system fonts are collected and prepared in the background, and fontique finds a
+# generic font family only when it is first used.
 gpui-ce = { path = "patches/gpui-ce" }
 gpui_ce_linux = { path = "patches/gpui_ce_linux" }
 gpui_ce_parley = { path = "patches/gpui_ce_parley" }

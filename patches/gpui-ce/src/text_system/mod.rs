@@ -672,3 +672,23 @@ mod raster_contract_tests {
         }
     }
 }
+
+static STARTUP_FONT_FAMILIES: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// Names the font families the app shows first. Called before the application is created, it
+/// lets the text system load and prepare them in the background while the app starts, instead
+/// of when the first text is laid out.
+pub fn set_startup_font_families(families: impl IntoIterator<Item = impl Into<String>>) {
+    if let Ok(mut list) = STARTUP_FONT_FAMILIES.lock() {
+        *list = families.into_iter().map(Into::into).collect();
+    }
+}
+
+/// The families given to [`set_startup_font_families`].
+#[doc(hidden)]
+pub fn startup_font_families() -> Vec<String> {
+    STARTUP_FONT_FAMILIES
+        .lock()
+        .map(|list| list.clone())
+        .unwrap_or_default()
+}

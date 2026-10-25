@@ -69,7 +69,129 @@ impl WgpuRenderer {
             compositor_gpu,
             extra_requirements,
             backend_order,
+            None,
         )
+    }
+
+    /// Like [`WgpuRenderer::new`], but draws with `atlas`, a deferred atlas the window has
+    /// used for its software frames; it gets attached to the device.
+    #[cfg(not(target_family = "wasm"))]
+    pub fn new_with_atlas<W>(
+        gpu_context: GpuContext,
+        window: &W,
+        config: WgpuSurfaceConfig,
+        compositor_gpu: Option<CompositorGpuHint>,
+        extra_requirements: Option<WgpuDeviceRequirements>,
+        atlas: Arc<WgpuAtlas>,
+    ) -> anyhow::Result<Self>
+    where
+        W: HasWindowHandle + HasDisplayHandle + std::fmt::Debug + Send + Sync + Clone + 'static,
+    {
+        let window_handle = window
+            .window_handle()
+            .map_err(|error| anyhow::anyhow!("failed to get window handle: {error}"))?;
+        let renderer = Self::new_for_target(
+            Rc::clone(&gpu_context),
+            &|| Some(Box::new(window.clone())),
+            NativeSurfaceTarget::Window(window_handle.as_raw()),
+            config,
+            compositor_gpu,
+            extra_requirements,
+            NativeBackend::PREFERENCE,
+            Some(atlas.clone()),
+        )?;
+        if let Some(context) = gpu_context.borrow().as_ref() {
+            atlas.attach(context);
+        }
+        Ok(renderer)
+    }
+
+    /// Starts creating a renderer for `window`, and its GPU context, on a background thread.
+    /// Meanwhile the window can draw its frames with [`crate::render_scene`] from `atlas`,
+    /// which the renderer then takes over.
+    #[cfg(not(target_family = "wasm"))]
+    pub fn spawn<W>(
+        window: &W,
+        config: WgpuSurfaceConfig,
+        compositor_gpu: Option<CompositorGpuHint>,
+        extra_requirements: Option<WgpuDeviceRequirements>,
+        atlas: Arc<WgpuAtlas>,
+    ) -> PendingRenderer
+    where
+        W: HasWindowHandle + HasDisplayHandle + std::fmt::Debug + Send + Sync + Clone + 'static,
+    {
+        let window = window.clone();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let thread_atlas = atlas.clone();
+        let thread = std::thread::Builder::new()
+            .name("gpu-init".into())
+            .spawn(move || {
+                let result = Self::prepare(
+                    &window,
+                    config,
+                    compositor_gpu,
+                    extra_requirements,
+                    thread_atlas,
+                );
+                sender.send(PreparedRenderer(result)).ok();
+            })
+            .ok();
+        PendingRenderer {
+            receiver,
+            thread,
+            atlas,
+        }
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    fn prepare<W>(
+        window: &W,
+        config: WgpuSurfaceConfig,
+        compositor_gpu: Option<CompositorGpuHint>,
+        extra_requirements: Option<WgpuDeviceRequirements>,
+        atlas: Arc<WgpuAtlas>,
+    ) -> anyhow::Result<(WgpuContext, WgpuRenderer)>
+    where
+        W: HasWindowHandle + HasDisplayHandle,
+    {
+        anyhow::ensure!(
+            extra_requirements.is_none(),
+            "extra device requirements need the full adapter selection"
+        );
+        let context = WgpuContext::create_without_surface(compositor_gpu.as_ref())?;
+        anyhow::ensure!(
+            context.matches_compositor(compositor_gpu.as_ref()),
+            "the first GPU is not the compositor's"
+        );
+        let raw_window_handle = window
+            .window_handle()
+            .map_err(|error| anyhow::anyhow!("failed to get window handle: {error}"))?
+            .as_raw();
+        let raw_display_handle = window
+            .display_handle()
+            .map_err(|error| anyhow::anyhow!("failed to get display handle: {error}"))?
+            .as_raw();
+        // SAFETY: the window outlives the surface; `PendingRenderer` joins this thread
+        // before the window can go away.
+        let surface = unsafe {
+            context
+                .instance
+                .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle: Some(raw_display_handle),
+                    raw_window_handle,
+                })
+        }?;
+        context.check_compatible_with_surface(&surface)?;
+        let renderer = new_internal_with_validation_scope(
+            None,
+            &context,
+            Some(surface),
+            config,
+            compositor_gpu,
+            extra_requirements,
+            Some(atlas),
+        )?;
+        Ok((context, renderer))
     }
 
     /// Creates a renderer presenting to a `CAMetalLayer`, such as the backing
@@ -101,6 +223,7 @@ impl WgpuRenderer {
         compositor_gpu: Option<CompositorGpuHint>,
         extra_requirements: Option<WgpuDeviceRequirements>,
         backend_order: &[NativeBackend],
+        atlas: Option<Arc<WgpuAtlas>>,
     ) -> anyhow::Result<Self> {
         let mut context_slot = gpu_context.borrow_mut();
         if let Some(context) = context_slot.as_ref() {
@@ -113,6 +236,7 @@ impl WgpuRenderer {
                 config,
                 compositor_gpu,
                 extra_requirements,
+                atlas,
             );
         }
 
@@ -141,6 +265,7 @@ impl WgpuRenderer {
                     attempt_config,
                     compositor_gpu,
                     extra_requirements.clone(),
+                    atlas.clone(),
                 )?;
                 Ok((context, renderer))
             },
@@ -454,11 +579,13 @@ fn new_internal_with_validation_scope(
     config: WgpuSurfaceConfig,
     compositor_gpu: Option<CompositorGpuHint>,
     extra_requirements: Option<WgpuDeviceRequirements>,
+    atlas: Option<Arc<WgpuAtlas>>,
 ) -> anyhow::Result<WgpuRenderer> {
     let validation_scope = context
         .device
         .push_error_scope(wgpu::ErrorFilter::Validation);
-    let atlas = Arc::new(WgpuAtlas::from_context(context));
+    // A deferred atlas gets its textures when the renderer is handed to its window.
+    let atlas = atlas.unwrap_or_else(|| Arc::new(WgpuAtlas::from_context(context)));
     let renderer = WgpuRenderer::new_internal(
         gpu_context,
         context,
@@ -611,5 +738,60 @@ mod tests {
             assert_eq!(image.get_pixel(1, 1).0, [255, 0, 0, 255]);
         }
         Ok(())
+    }
+}
+
+/// The outcome of [`WgpuRenderer::spawn`]'s thread.
+#[cfg(not(target_family = "wasm"))]
+struct PreparedRenderer(anyhow::Result<(WgpuContext, WgpuRenderer)>);
+
+// SAFETY: the renderer is built without its shared `Rc` GPU context, which is set only once
+// it has arrived on the window's thread. Everything else it holds is owned by it and moves
+// with it; nothing else references those parts.
+#[cfg(not(target_family = "wasm"))]
+unsafe impl Send for PreparedRenderer {}
+
+/// A renderer being created on a background thread, see [`WgpuRenderer::spawn`].
+#[cfg(not(target_family = "wasm"))]
+pub struct PendingRenderer {
+    receiver: std::sync::mpsc::Receiver<PreparedRenderer>,
+    thread: Option<std::thread::JoinHandle<()>>,
+    atlas: Arc<WgpuAtlas>,
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl PendingRenderer {
+    /// The renderer, once the thread has finished; an error means the window should create
+    /// one the usual way, with [`WgpuRenderer::new_with_atlas`].
+    pub fn try_finish(&mut self, gpu_context: &GpuContext) -> Option<anyhow::Result<WgpuRenderer>> {
+        let result = match self.receiver.try_recv() {
+            Ok(PreparedRenderer(result)) => result,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return None,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                Err(anyhow::anyhow!("the GPU initialization thread ended"))
+            }
+        };
+        if let Some(thread) = self.thread.take() {
+            thread.join().ok();
+        }
+        Some(result.map(|(context, mut renderer)| {
+            self.atlas.attach(&context);
+            renderer.context = Some(Rc::clone(gpu_context));
+            let mut slot = gpu_context.borrow_mut();
+            if slot.is_none() {
+                *slot = Some(context);
+            }
+            renderer
+        }))
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl Drop for PendingRenderer {
+    fn drop(&mut self) {
+        // The thread's surface refers to the window, which goes away after this.
+        if let Some(thread) = self.thread.take() {
+            thread.join().ok();
+        }
     }
 }

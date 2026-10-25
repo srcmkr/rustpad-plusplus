@@ -535,13 +535,13 @@ impl Scene {
 #[repr(C)]
 pub struct SceneHsla {
     /// Hue, in a range from 0 to 1
-    pub(crate) h: f32,
+    pub h: f32,
     /// Saturation, in a range from 0 to 1
-    pub(crate) s: f32,
+    pub s: f32,
     /// Lightness, in a range from 0 to 1
-    pub(crate) l: f32,
+    pub l: f32,
     /// Alpha, in a range from 0 to 1
-    pub(crate) a: f32,
+    pub a: f32,
 }
 impl Into<palette::Hsla> for SceneHsla {
     fn into(self) -> palette::Hsla {

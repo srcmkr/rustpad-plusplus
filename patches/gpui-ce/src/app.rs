@@ -1941,6 +1941,9 @@ impl App {
                     // where DispatchTree::root_node_id asserts on empty nodes
                     let clear = window.draw(cx);
                     clear.clear(cx);
+                    if window.platform_window.wants_early_present() {
+                        window.present();
+                    }
 
                     cx.window_handles.insert(id, window.handle);
                     cx.windows.get_mut(id).unwrap().replace(Box::new(window));

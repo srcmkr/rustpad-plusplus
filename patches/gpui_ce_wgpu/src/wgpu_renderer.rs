@@ -35,6 +35,8 @@ mod headless;
 mod path_types;
 mod pipelines;
 mod platform;
+#[cfg(not(target_family = "wasm"))]
+pub use platform::PendingRenderer;
 mod resources;
 mod settings;
 mod surfaces;

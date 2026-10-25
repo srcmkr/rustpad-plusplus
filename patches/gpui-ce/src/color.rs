@@ -346,11 +346,16 @@ impl Display for ColorSpace {
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[repr(C)]
 pub struct Background {
-    pub(crate) tag: BackgroundTag,
-    pub(crate) color_space: ColorSpace,
-    pub(crate) solid: crate::SceneHsla,
-    pub(crate) gradient_angle_or_pattern_height: f32,
-    pub(crate) colors: [LinearColorStop; 2],
+    #[doc(hidden)]
+    pub tag: BackgroundTag,
+    #[doc(hidden)]
+    pub color_space: ColorSpace,
+    #[doc(hidden)]
+    pub solid: crate::SceneHsla,
+    #[doc(hidden)]
+    pub gradient_angle_or_pattern_height: f32,
+    #[doc(hidden)]
+    pub colors: [LinearColorStop; 2],
     /// Padding for alignment for repr(C) layout.
     pub(crate) padding: u32,
 }

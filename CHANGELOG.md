@@ -2,6 +2,15 @@
 
 What changed in each version of rustpad++. The newest version is at the top.
 
+## Unreleased
+
+- rustpad++ starts about seven times as fast: the window shows its content
+  after about 35 ms instead of 230 ms. The first frames are drawn on the CPU
+  while the graphics card gets ready, which it then takes over unnoticed.
+  Without a usable graphics driver, rustpad++ keeps drawing on the CPU.
+- The status bar no longer keeps showing "indexing lines" after a large file
+  has been indexed.
+
 ## 0.4.0 - 2026-10-25
 
 - New color scheme Aurora (Settings → Appearance): graded dark surfaces,

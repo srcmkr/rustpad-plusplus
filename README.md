@@ -36,9 +36,11 @@ make it executable and start it.
   written every second, so even a crash or power cut costs only the last
   moments. Saving writes a new file and swaps it in, so an interrupted save
   never leaves a half-written file behind.
-- **Fast, whatever the size.** The window is on screen in under 300 ms, a
-  file opened from the file manager is a new tab within milliseconds, and the
-  GPU draws every frame. Size does not slow it down: files are memory-mapped,
+- **Fast, whatever the size.** The window shows its content about 35 ms after
+  you start rustpad++, faster than any other editor we measured: the first
+  frames are drawn on the CPU while the graphics card gets ready, which then
+  takes over unnoticed. A file opened from the file manager is a new tab
+  within milliseconds. Size does not slow it down: files are memory-mapped,
   not loaded, so a 1 TiB file is open at once and a 1.7 GiB log with 25
   million lines is usable while its lines are counted in the background.
   Find, replace, save and the backups work in chunks, so none of them needs
@@ -56,22 +58,36 @@ make it executable and start it.
   access is the update check, which can be switched off; updates are signed,
   and only a correctly signed one is installed.
 
-### Opening a 1 GiB log file
+### How it compares
+
+Starting with a small file (a 100 KB Rust source), median of 8 starts each:
+
+| Editor | Content on screen | Fully drawn |
+|---|---|---|
+| **rustpad++** | **34 ms** | **34 ms** |
+| Notepad Next 0.15 | 122 ms | 180 ms |
+| Sublime Text 4215 | 154 ms | 444 ms |
+| rustpad++ 0.4.0 | 228 ms | 228 ms |
+| Kate 23.08 | 231 ms | 552 ms |
+| GNOME Text Editor 46.3 | 351 ms | 576 ms |
+
+Opening a 1 GiB log file:
 
 | Editor | Text on screen | Fully loaded | Memory |
 |---|---|---|---|
-| **rustpad++ 0.4.0** | **0.3 s** | **0.5 s** | **39 MiB** |
+| **rustpad++** | **0.03 s** | **0.4 s** | **43 MiB** |
 | GNOME Text Editor 46.3 | 0.45 s | about 8.5 min | 3.3 GiB |
 | Notepad Next 0.15 | 1.8 s | 1.8 s | 2.1 GiB |
 | Kate 23.08 | 3.6 s | 3.7 s | 3.5 GiB |
 | Sublime Text 4215 | 7.2 s | 7.2 s | 1.4 GiB |
 
-Measured on one machine (Linux Mint 22.3, X11, Core Ultra 9 285K, RTX 4090)
-with the file already in the page cache; "fully loaded" means the editor's
-CPU use has settled, for rustpad++ that is when all 11.5 million lines are
-counted. "Memory" is the program's own memory, without the file's pages
-that the system caches anyway. With a small file, all of these editors are
-on screen in 0.2 to 0.6 s, rustpad++ in about 0.27 s.
+Measured on one machine (Linux Mint 22.3, X11, Core Ultra 9 285K, RTX 4090),
+from starting the program until its window shows the content; the editors
+took turns, each with a profile that had been used before, and the file was
+already in the page cache. "Fully drawn" is the last visible change;
+"fully loaded" means the editor's CPU use has settled, for rustpad++ that is
+when all 11.5 million lines are counted. "Memory" is the program's own
+memory, without the file's pages that the system caches anyway.
 
 ## Features
 

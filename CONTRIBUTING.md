@@ -67,7 +67,7 @@ catalog is reviewed, drop the note from its first line.
 | [`src`](src) | Window, menus, dialogs, settings, session, translations, updates (`update.rs`, `manage.rs`) |
 | [`crates/rustpad-update`](crates/rustpad-update) | Finding, verifying and unpacking releases; key and signing tools |
 | [`packaging`](packaging) | Polkit rules, release key, package build |
-| [`patches`](patches) | A patched copy of a dependency; the reason is noted in `Cargo.toml` |
+| [`patches`](patches) | Patched copies of dependencies, mostly of GPUI for a faster start; the reasons are noted in `Cargo.toml` |
 | [`assets`](assets) | Logo, icons, menu entry template |
 | [`po`](po) | Translations |
 | [`.github/workflows`](.github/workflows) | Tests for every push, releases for every tag |

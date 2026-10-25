@@ -1339,3 +1339,48 @@ mod web_backend_options_tests {
         );
     }
 }
+
+#[cfg(not(target_family = "wasm"))]
+impl WgpuContext {
+    /// Picks an adapter like `select_adapter_and_device` does, without a surface to test:
+    /// callers check the surface and fall back to the full selection if it does not fit.
+    pub(crate) fn create_without_surface(
+        compositor_gpu: Option<&CompositorGpuHint>,
+    ) -> anyhow::Result<WgpuContext> {
+        anyhow::ensure!(
+            std::env::var_os("ZED_DEVICE_ID").is_none(),
+            "ZED_DEVICE_ID needs the full adapter selection"
+        );
+        let instance = NativeBackend::Vulkan.instance(None);
+        let mut adapters =
+            gpui::block_on(instance.raw.enumerate_adapters(wgpu::Backends::VULKAN));
+        // Software renderers are left to the full selection, which knows when to allow them.
+        adapters.retain(|adapter| adapter.get_info().device_type != wgpu::DeviceType::Cpu);
+        adapters.sort_by_key(|adapter| {
+            let info = adapter.get_info();
+            let compositor_match = compositor_gpu.is_some_and(|hint| {
+                info.device != 0 && info.vendor == hint.vendor_id && info.device == hint.device_id
+            });
+            let type_priority = match info.device_type {
+                wgpu::DeviceType::DiscreteGpu => 0,
+                wgpu::DeviceType::IntegratedGpu => 1,
+                wgpu::DeviceType::Other => 2,
+                wgpu::DeviceType::VirtualGpu => 3,
+                wgpu::DeviceType::Cpu => 4,
+            };
+            (!compositor_match, type_priority)
+        });
+        let adapter = adapters.into_iter().next().context("no GPU adapter")?;
+        let device = gpui::block_on(Self::create_device(&adapter, None))?;
+        Self::from_created_device(instance.raw, adapter, device)
+    }
+
+    /// Whether this context runs on the GPU the compositor uses, when that is known.
+    pub(crate) fn matches_compositor(&self, compositor_gpu: Option<&CompositorGpuHint>) -> bool {
+        let Some(hint) = compositor_gpu else {
+            return true;
+        };
+        let info = self.adapter.get_info();
+        info.vendor == hint.vendor_id && info.device == hint.device_id
+    }
+}

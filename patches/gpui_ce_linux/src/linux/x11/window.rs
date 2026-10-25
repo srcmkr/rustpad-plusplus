@@ -10,7 +10,7 @@ use gpui::{
     WindowDecorations, WindowKind, WindowParams, WindowVisibility, popup::PopupNotSupportedError,
     px,
 };
-use gpui_wgpu::{CompositorGpuHint, WgpuRenderer, WgpuSurfaceConfig};
+use gpui_wgpu::{CompositorGpuHint, PendingRenderer, WgpuAtlas, WgpuRenderer, WgpuSurfaceConfig};
 
 use collections::FxHashSet;
 use gpui_util::{ResultExt, maybe};
@@ -272,6 +272,8 @@ pub struct X11WindowState {
     /// Taken when the window is dropped. Its GPU objects use the X connection, so they mustn't
     /// outlive the window, which a display mode switch relies on.
     renderer: Option<WgpuRenderer>,
+    /// Draws the first frames on the CPU while `renderer` is still being created.
+    software: Option<SoftwarePresenter>,
     display: Rc<dyn PlatformDisplay>,
     input_handler: Option<PlatformInputHandler>,
     appearance: WindowAppearance,
@@ -295,7 +297,155 @@ pub struct X11WindowState {
     accesskit_adapter: Option<accesskit_unix::Adapter>,
 }
 
+/// Shows frames drawn on the CPU while the window's GPU renderer is created on another thread,
+/// so the window has its content before the GPU driver is ready.
+struct SoftwarePresenter {
+    atlas: Arc<WgpuAtlas>,
+    /// The GPU renderer being created. It starts after the first frame is shown: the
+    /// driver's setup would slow down the main thread before that.
+    pending: Option<PendingRenderer>,
+    gc: xproto::Gcontext,
+    depth: u8,
+    size: Size<DevicePixels>,
+    raw_window: RawWindow,
+    gpu_context: gpui_wgpu::GpuContext,
+    compositor_gpu: Option<CompositorGpuHint>,
+    gpu_requirements: Option<gpui_wgpu::WgpuDeviceRequirements>,
+    is_bgr: bool,
+    font: gpui_wgpu::FontRasterizationSettings,
+    /// Keep drawing on the CPU: no GPU renderer could be created, or `GPUI_SOFTWARE_ONLY` asks
+    /// for it.
+    cpu_only: bool,
+}
+
+impl SoftwarePresenter {
+    fn present(&mut self, xcb: &XCBConnection, x_window: xproto::Window, scene: &Scene) {
+        self.show(xcb, x_window, scene);
+        if self.pending.is_none() && !self.cpu_only {
+            self.pending = Some(WgpuRenderer::spawn(
+                &self.raw_window,
+                WgpuSurfaceConfig {
+                    size: self.size,
+                    transparent: false,
+                    preferred_present_mode: None,
+                },
+                self.compositor_gpu,
+                self.gpu_requirements.clone(),
+                self.atlas.clone(),
+            ));
+        }
+    }
+
+    fn show(&self, xcb: &XCBConnection, x_window: xproto::Window, scene: &Scene) {
+        let (width, height) = (self.size.width.0 as usize, self.size.height.0 as usize);
+        let Some(frame) = gpui_wgpu::render_scene(scene, &self.atlas, width, height, self.font)
+        else {
+            return;
+        };
+        // The frame becomes the window's background: the X server shows it as soon as the
+        // window is mapped, and repaints it on exposure, without waiting for us.
+        let Ok(pixmap) = xcb.generate_id() else {
+            return;
+        };
+        if xcb
+            .create_pixmap(self.depth, pixmap, x_window, width as u16, height as u16)
+            .log_err()
+            .is_none()
+        {
+            return;
+        }
+        let row_bytes = width * 4;
+        let rows_per_request = (xcb.maximum_request_bytes().saturating_sub(64) / row_bytes).max(1);
+        for (index, rows) in frame.pixels.chunks(rows_per_request * row_bytes).enumerate() {
+            xcb.put_image(
+                xproto::ImageFormat::Z_PIXMAP,
+                pixmap,
+                self.gc,
+                width as u16,
+                (rows.len() / row_bytes) as u16,
+                0,
+                (index * rows_per_request) as i16,
+                0,
+                self.depth,
+                rows,
+            )
+            .log_err();
+        }
+        xcb.change_window_attributes(
+            x_window,
+            &xproto::ChangeWindowAttributesAux::new().background_pixmap(pixmap),
+        )
+        .log_err();
+        xcb.clear_area(false, x_window, 0, 0, 0, 0).log_err();
+        xcb.free_pixmap(pixmap).log_err();
+        xcb.flush().log_err();
+    }
+}
+
 impl X11WindowState {
+    /// Takes over the GPU renderer once its thread is done. Returns whether it did.
+    fn finish_software_rendering(
+        &mut self,
+        xcb: &XCBConnection,
+        x_window: xproto::Window,
+    ) -> bool {
+        let Some(software) = self.software.as_mut() else {
+            return false;
+        };
+        if software.cpu_only {
+            return false;
+        }
+        let Some(result) = software
+            .pending
+            .as_mut()
+            .and_then(|pending| pending.try_finish(&software.gpu_context))
+        else {
+            return false;
+        };
+        let software = self.software.take().expect("checked above");
+        let mut renderer = match result {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                log::info!("creating the GPU renderer the usual way: {error:#}");
+                let config = WgpuSurfaceConfig {
+                    size: software.size,
+                    transparent: false,
+                    preferred_present_mode: None,
+                };
+                match WgpuRenderer::new_with_atlas(
+                    software.gpu_context.clone(),
+                    &software.raw_window,
+                    config,
+                    software.compositor_gpu,
+                    software.gpu_requirements.clone(),
+                    software.atlas.clone(),
+                ) {
+                    Ok(renderer) => renderer,
+                    Err(error) => {
+                        log::error!("no GPU renderer, drawing on the CPU: {error:#}");
+                        self.software = Some(SoftwarePresenter {
+                            cpu_only: true,
+                            ..software
+                        });
+                        return false;
+                    }
+                }
+            }
+        };
+        renderer.set_subpixel_layout(software.is_bgr);
+        renderer.update_transparency(self.is_transparent());
+        renderer.update_drawable_size(software.size);
+        xcb.free_gc(software.gc).log_err();
+        // From now on the GPU draws; an old frame must not show through on resize.
+        xcb.change_window_attributes(
+            x_window,
+            &xproto::ChangeWindowAttributesAux::new().background_pixmap(x11rb::NONE),
+        )
+        .log_err();
+        self.renderer = Some(renderer);
+        true
+    }
+
     fn is_transparent(&self) -> bool {
         self.background_appearance.is_transparent()
     }
@@ -758,40 +908,74 @@ impl X11WindowState {
 
             xcb_flush(xcb);
 
-            let mut renderer = {
-                let raw_window = RawWindow {
-                    connection: as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(
-                        xcb,
-                    ) as *mut _,
-                    screen_id: x_screen_index,
-                    window_id: x_window,
-                    visual_id: visual.id,
+            let raw_window = RawWindow {
+                connection: as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(
+                    xcb,
+                ) as *mut _,
+                screen_id: x_screen_index,
+                window_id: x_window,
+                visual_id: visual.id,
+            };
+            // Note: this has to be done after the GPU init, or otherwise
+            // the sizes are immediately invalidated.
+            let size = query_render_extent(xcb, x_window)?;
+            let config = WgpuSurfaceConfig {
+                size,
+                // We set it to transparent by default, even if we have client-side
+                // decorations, since those seem to work on X11 even without `true` here.
+                // If the window appearance changes, then the renderer will get updated
+                // too
+                transparent: false,
+                preferred_present_mode: None,
+            };
+            // The first window draws on the CPU until its GPU device is ready; later windows
+            // share the device.
+            let draw_first_frames_on_cpu = gpu_context.borrow().is_none()
+                && std::env::var_os("GPUI_NO_SOFTWARE_FRAMES").is_none();
+            let (renderer, software) = if draw_first_frames_on_cpu {
+                let gc = xcb.generate_id()?;
+                check_reply(
+                    || "X11 CreateGC failed.",
+                    xcb.create_gc(gc, x_window, &xproto::CreateGCAux::new()),
+                )?;
+                let software = SoftwarePresenter {
+                    atlas: Arc::new(WgpuAtlas::new_deferred()),
+                    pending: None,
+                    gc,
+                    depth: visual.depth,
+                    size,
+                    raw_window,
+                    gpu_context,
+                    compositor_gpu,
+                    gpu_requirements,
+                    is_bgr,
+                    font: gpui_wgpu::FontRasterizationSettings::from_environment()
+                        .with_subpixel_order(if is_bgr {
+                            gpui_wgpu::SubpixelOrder::BlueGreenRed
+                        } else {
+                            gpui_wgpu::SubpixelOrder::RedGreenBlue
+                        }),
+                    cpu_only: std::env::var_os("GPUI_SOFTWARE_ONLY").is_some(),
                 };
-                let config = WgpuSurfaceConfig {
-                    // Note: this has to be done after the GPU init, or otherwise
-                    // the sizes are immediately invalidated.
-                    size: query_render_extent(xcb, x_window)?,
-                    // We set it to transparent by default, even if we have client-side
-                    // decorations, since those seem to work on X11 even without `true` here.
-                    // If the window appearance changes, then the renderer will get updated
-                    // too
-                    transparent: false,
-                    preferred_present_mode: None,
-                };
-                WgpuRenderer::new(
+                (None, Some(software))
+            } else {
+                let mut renderer = WgpuRenderer::new(
                     gpu_context,
                     &raw_window,
                     config,
                     compositor_gpu,
                     gpu_requirements,
-                )?
+                )?;
+                renderer.set_subpixel_layout(is_bgr);
+                (Some(renderer), None)
             };
-
-            renderer.set_subpixel_layout(is_bgr);
 
             // Set max window size hints based on the GPU's maximum texture dimension.
             // This prevents the window from being resized larger than what the GPU can render.
-            let max_texture_size = renderer.max_texture_size();
+            // Every desktop GPU supports this; drawn on the CPU, the window is not limited.
+            let max_texture_size = renderer
+                .as_ref()
+                .map_or(8192, |renderer| renderer.max_texture_size());
             let mut size_hints = WmSizeHints::new();
             if let Some(size) = params.window_min_size {
                 size_hints.min_size =
@@ -844,7 +1028,8 @@ impl X11WindowState {
                 visual_id: visual.id,
                 bounds: bounds.to_pixels(scale_factor),
                 scale_factor,
-                renderer: Some(renderer),
+                renderer,
+                software,
                 atoms: *atoms,
                 input_handler: None,
                 active: false,
@@ -899,6 +1084,7 @@ impl Drop for X11Window {
         // The renderer's GPU objects use the X connection, and a display mode switch closes the
         // connection once no window is left in the client's window map, so both go now.
         state.renderer.take();
+        state.software.take();
 
         maybe!({
             check_reply(
@@ -1193,6 +1379,26 @@ impl X11WindowStatePtr {
     }
 
     pub fn refresh(&self, mut request_frame_options: RequestFrameOptions) {
+        {
+            let mut state = self.state.borrow_mut();
+            if state.software.is_some()
+                && state.finish_software_rendering(&self.xcb, self.x_window)
+            {
+                // The software frame stays until something changes, unless its text used
+                // subpixel glyphs this GPU cannot draw.
+                let subpixel = state.client.0.upgrade().is_some_and(|client| {
+                    client
+                        .borrow()
+                        .gpu_context
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|context| context.supports_dual_source_blending())
+                });
+                if !subpixel {
+                    state.force_render_after_recovery = true;
+                }
+            }
+        }
         let callback = self.callbacks.borrow_mut().request_frame.take();
         if let Some(mut fun) = callback {
             // Expose events can present a frame before the refresh timer runs,
@@ -1320,6 +1526,8 @@ impl X11WindowStatePtr {
             let gpu_size = query_render_extent(&self.xcb, self.x_window)?;
             if let Some(renderer) = &mut state.renderer {
                 renderer.update_drawable_size(gpu_size);
+            } else if let Some(software) = &mut state.software {
+                software.size = gpu_size;
             }
             let result = (is_resize, state.content_size(), state.scale_factor);
             if let Some(value) = state.last_sync_counter.take() {
@@ -1690,7 +1898,16 @@ impl PlatformWindow for X11Window {
         xcb_flush(&self.0.xcb);
     }
 
+    fn wants_early_present(&self) -> bool {
+        self.0.state.borrow().software.is_some()
+    }
+
     fn is_subpixel_rendering_supported(&self) -> bool {
+        // Desktop GPUs support it. Should the GPU that takes over not, the window redraws
+        // everything then, with grayscale text.
+        if self.0.state.borrow().software.is_some() {
+            return true;
+        }
         self.0
             .state
             .borrow()
@@ -1809,6 +2026,14 @@ impl PlatformWindow for X11Window {
     fn draw(&self, scene: &Scene) {
         let mut inner = self.0.state.borrow_mut();
         let inner = &mut *inner;
+        if inner.renderer.is_none()
+            && !inner.finish_software_rendering(&self.0.xcb, self.0.x_window)
+        {
+            if let Some(software) = &mut inner.software {
+                software.present(&self.0.xcb, self.0.x_window, scene);
+            }
+            return;
+        }
         let Some(renderer) = &mut inner.renderer else {
             return;
         };
@@ -1841,9 +2066,11 @@ impl PlatformWindow for X11Window {
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        self.0
-            .state
-            .borrow()
+        let state = self.0.state.borrow();
+        if let Some(software) = &state.software {
+            return software.atlas.clone();
+        }
+        state
             .renderer
             .as_ref()
             .expect("the renderer is only taken when the window is dropped")

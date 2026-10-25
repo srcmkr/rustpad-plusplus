@@ -17,10 +17,10 @@ pub enum SubpixelOrder {
 /// Platform text-rasterization settings consumed by the glyph shaders.
 #[derive(Clone, Copy, Debug)]
 pub struct FontRasterizationSettings {
-    pub(super) gamma_ratios: [f32; 4],
-    pub(super) grayscale_enhanced_contrast: f32,
-    pub(super) subpixel_enhanced_contrast: f32,
-    pub(super) subpixel_order: SubpixelOrder,
+    pub(crate) gamma_ratios: [f32; 4],
+    pub(crate) grayscale_enhanced_contrast: f32,
+    pub(crate) subpixel_enhanced_contrast: f32,
+    pub(crate) subpixel_order: SubpixelOrder,
 }
 
 impl FontRasterizationSettings {
@@ -39,12 +39,19 @@ impl FontRasterizationSettings {
         }
     }
 
+    /// The same settings for an LCD with the given component order.
+    pub fn with_subpixel_order(mut self, subpixel_order: SubpixelOrder) -> Self {
+        self.subpixel_order = subpixel_order;
+        self
+    }
+
     /// Disables contrast and gamma correction, like the retired macOS Metal glyph shader.
     pub fn uncorrected() -> Self {
         Self::new(1.0, 0.0, 0.0, SubpixelOrder::RedGreenBlue)
     }
 
-    fn from_environment() -> Self {
+    /// The settings the renderer uses, from `ZED_FONTS_*` or the defaults.
+    pub fn from_environment() -> Self {
         let gamma = environment_f32("ZED_FONTS_GAMMA", 1.8).clamp(1.0, 2.2);
         let grayscale_enhanced_contrast =
             environment_f32("ZED_FONTS_GRAYSCALE_ENHANCED_CONTRAST", 1.0).max(0.0);

@@ -1371,6 +1371,29 @@ impl ParleyState {
             layout_context: LayoutContext::new(),
         }
     }
+
+    /// Loads `families` and shapes some text with each, so the caches this fills make the
+    /// first layouts with them fast.
+    fn warm_up(&mut self, families: &[String], system_font_fallback: &str) {
+        const SAMPLE: &str = "Ag 0123456789 abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        for family in families {
+            let names = face_families(family, system_font_fallback).collect::<Vec<_>>();
+            resolve_face(
+                &mut self.font_context,
+                &names,
+                gpui::FontWidth::NORMAL,
+                gpui::FontWeight::NORMAL.0,
+                gpui::FontStyle::Normal,
+            );
+            let mut builder =
+                self.layout_context
+                    .ranged_builder(&mut self.font_context, SAMPLE, 1.0, false);
+            builder.push_default(StyleProperty::FontSize(14.0));
+            builder.push_default(StyleProperty::FontFamily(FontFamily::from(names.as_slice())));
+            builder.push_default(StyleProperty::Brush(ParleyBrush { source_run: 0 }));
+            builder.build(SAMPLE);
+        }
+    }
 }
 
 /// Shapes with Parley and paints exact font instances with an injected glyph rasterizer.
@@ -1384,6 +1407,8 @@ pub struct ParleyTextSystem {
     recommended_rendering_mode: TextRenderingMode,
     automatic_optical_sizing: bool,
     parley: Mutex<ParleyState>,
+    /// The system font catalog while a background thread still collects it; taken on first use.
+    pending_font_context: Mutex<Option<std::thread::JoinHandle<ParleyState>>>,
     paragraph_cache: Mutex<ParagraphCache>,
     paragraph_result_cache: Mutex<ParagraphResultCache>,
     system_font_fallback: String,
@@ -1414,7 +1439,21 @@ impl ParleyTextSystem {
         system_font_fallback: impl Into<String>,
         rasterizer: impl GlyphRasterizer + 'static,
     ) -> Self {
-        let parley = ParleyState::new(system_fonts);
+        // Collecting the system fonts takes a while; do it alongside the rest of startup.
+        let system_font_fallback = system_font_fallback.into();
+        let warm_fallback = system_font_fallback.clone();
+        let pending_font_context = std::thread::Builder::new()
+            .name("font-collection".into())
+            .spawn(move || {
+                let mut state = ParleyState::new(system_fonts);
+                state.warm_up(&gpui::startup_font_families(), &warm_fallback);
+                state
+            })
+            .ok();
+        let parley = match pending_font_context {
+            Some(_) => ParleyState::new(SystemFonts::Skip),
+            None => ParleyState::new(system_fonts),
+        };
         let color_glyph_formats = [
             ColorGlyphKind::ColrV0,
             ColorGlyphKind::ColrV1,
@@ -1437,11 +1476,24 @@ impl ParleyTextSystem {
             recommended_rendering_mode,
             automatic_optical_sizing: false,
             parley: Mutex::new(parley),
+            pending_font_context: Mutex::new(pending_font_context),
             paragraph_cache: Mutex::default(),
             paragraph_result_cache: Mutex::default(),
-            system_font_fallback: system_font_fallback.into(),
+            system_font_fallback,
             additional_fallbacks: Vec::new(),
         }
+    }
+
+    /// The Parley state, with the system font catalog once its thread is done.
+    fn parley(&self) -> parking_lot::MutexGuard<'_, ParleyState> {
+        let mut state = self.parley.lock();
+        if let Some(pending) = self.pending_font_context.lock().take() {
+            // If the thread panicked, text falls back to the fonts registered by the app.
+            if let Ok(collected) = pending.join() {
+                *state = collected;
+            }
+        }
+        state
     }
 
     /// Enables explicit optical sizing from each shaped run's logical font size.
@@ -1490,7 +1542,7 @@ impl ParleyTextSystem {
             .collect::<Vec<_>>();
 
         let resolved = {
-            let mut state = self.parley.lock();
+            let mut state = self.parley();
 
             resolve_face(
                 &mut state.font_context,
@@ -1850,7 +1902,7 @@ impl ParleyTextSystem {
                     .collect::<Vec<_>>()
             });
 
-            let mut state = self.parley.lock();
+            let mut state = self.parley();
             let ParleyState {
                 font_context,
                 layout_context,
@@ -2303,7 +2355,7 @@ impl PlatformTextSystem for ParleyTextSystem {
             .collect::<Vec<_>>();
 
         {
-            let mut state = self.parley.lock();
+            let mut state = self.parley();
             register_font_blobs(&mut state.font_context, &blobs)?;
 
             let _previous_generation = self.font_generation.fetch_add(1, Ordering::Release);
@@ -2316,7 +2368,7 @@ impl PlatformTextSystem for ParleyTextSystem {
 
     fn all_font_names(&self) -> Vec<String> {
         let mut names = {
-            let mut state = self.parley.lock();
+            let mut state = self.parley();
 
             family_names(&mut state.font_context)
         };

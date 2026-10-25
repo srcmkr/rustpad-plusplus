@@ -671,44 +671,9 @@ impl SystemFonts {
             }
         }
 
-        // Populate the generic family map.
-        let mut generic_families = GenericFamilyMap::default();
-        for (generic_family, name) in GENERIC_FAMILY_NAMES.iter().copied() {
-            let mut pattern = Pattern::new().unwrap();
-            pattern.add_string(FC_FAMILY, name);
-            // TODO: do we need FcConfigSetDefaultSubstitute?
-
-            config.substitute(&mut pattern, FcMatchPattern);
-
-            // We enable the "trim" option here which ignores later fonts if
-            // they provide no new Unicode coverage.
-            let font_set = config.font_sort(&pattern, true).unwrap();
-
-            // There are a lot of duplicate font families in the substituted
-            // pattern. Keep track of which ones have already been added to the
-            // list.
-            let mut added_families = HashSet::new();
-
-            generic_families.append(
-                generic_family,
-                font_set.iter().filter_map(|font| {
-                    // Not sure if FcFontRenderPrepare performs any substitutions
-                    // relevant to fallback family name matching, but it's a good
-                    // idea to call it just in case.
-                    let font = config.font_render_prepare(&pattern, &font)?;
-                    // Generic families can have more than one name, but the only
-                    // one we care about is the first one.
-                    let name = font.get_string(FC_FAMILY, 0).ok()?;
-                    let family_name = name_map.get(name.as_ref())?;
-
-                    if !added_families.insert(family_name.id()) {
-                        return None;
-                    }
-
-                    Some(family_name.id())
-                }),
-            );
-        }
+        // Generic families are filled in on first use, see `generic_family`: sorting all
+        // fonts for each of them takes most of the time this function would take.
+        let generic_families = GenericFamilyMap::default();
 
         Self {
             name_map: Arc::new(name_map),
@@ -763,6 +728,61 @@ impl SystemFonts {
 }
 
 impl SystemFonts {
+    /// The families of a generic family, best first.
+    pub(crate) fn generic_family(
+        &mut self,
+        generic_family: GenericFamily,
+    ) -> SmallVec<[FamilyId; 2]> {
+        let mut families = SmallVec::new();
+        let Some(config) = self.config.as_ref() else {
+            return families;
+        };
+        let Some((_, name)) = GENERIC_FAMILY_NAMES
+            .iter()
+            .find(|(generic, _)| *generic == generic_family)
+        else {
+            return families;
+        };
+        let Some(mut pattern) = Pattern::new() else {
+            return families;
+        };
+        pattern.add_string(FC_FAMILY, name);
+        // TODO: do we need FcConfigSetDefaultSubstitute?
+
+        config.substitute(&mut pattern, FcMatchPattern);
+
+        // We enable the "trim" option here which ignores later fonts if
+        // they provide no new Unicode coverage.
+        let Ok(font_set) = config.font_sort(&pattern, true) else {
+            return families;
+        };
+
+        // There are a lot of duplicate font families in the substituted
+        // pattern. Keep track of which ones have already been added to the
+        // list.
+        let mut added_families = HashSet::new();
+        for font in font_set.iter() {
+            // Not sure if FcFontRenderPrepare performs any substitutions
+            // relevant to fallback family name matching, but it's a good
+            // idea to call it just in case.
+            let Some(font) = config.font_render_prepare(&pattern, &font) else {
+                continue;
+            };
+            // Generic families can have more than one name, but the only
+            // one we care about is the first one.
+            let Ok(name) = font.get_string(FC_FAMILY, 0) else {
+                continue;
+            };
+            let Some(family_name) = self.name_map.get(name.as_ref()) else {
+                continue;
+            };
+            if added_families.insert(family_name.id()) {
+                families.push(family_name.id());
+            }
+        }
+        families
+    }
+
     fn family_uncached(&mut self, id: FamilyId) -> Option<FamilyInfo> {
         let config = self.config.as_ref()?;
         let name = self.name_map.get_by_id(id).cloned()?;

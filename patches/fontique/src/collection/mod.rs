@@ -352,6 +352,16 @@ impl Inner {
         family: GenericFamily,
     ) -> impl Iterator<Item = FamilyId> + '_ + Clone {
         self.sync_shared();
+        // The fontconfig backend finds a generic family's members on first use.
+        #[cfg(all(feature = "system", any(target_os = "linux", target_os = "freebsd")))]
+        if let Some(system) = self.system.as_mut() {
+            let bit = 1u32 << (family as u32);
+            if system.generic_computed & bit == 0 {
+                system.generic_computed |= bit;
+                let families = system.fonts.lock().unwrap().generic_family(family);
+                Arc::make_mut(&mut system.generic_families).set(family, families.into_iter());
+            }
+        }
         GenericFamilies {
             ours: self.data.generic_families.get(family).iter().copied(),
             system: self
@@ -650,6 +660,9 @@ struct System {
     fonts: Arc<Mutex<SystemFonts>>,
     family_names: Arc<FamilyNameMap>,
     generic_families: Arc<GenericFamilyMap>,
+    /// Generic families looked up so far, by bit.
+    #[cfg(all(feature = "system", any(target_os = "linux", target_os = "freebsd")))]
+    generic_computed: u32,
 }
 
 impl System {
@@ -664,6 +677,8 @@ impl System {
             fonts,
             family_names,
             generic_families,
+            #[cfg(all(feature = "system", any(target_os = "linux", target_os = "freebsd")))]
+            generic_computed: 0,
         }
     }
 }
@@ -874,4 +889,33 @@ fn make_shared_matches_local() {
     let names_after: Vec<String> = collection.family_names().map(String::from).collect();
 
     assert_eq!(names_before.len(), names_after.len());
+}
+
+#[cfg(all(test, feature = "system", any(target_os = "linux", target_os = "freebsd")))]
+mod lazy_generic_tests {
+    use super::*;
+
+    #[test]
+    fn generic_families_are_found_on_first_use() {
+        let mut collection = Collection::new(CollectionOptions {
+            shared: false,
+            system_fonts: true,
+        });
+        let first = collection
+            .generic_families(GenericFamily::Monospace)
+            .collect::<Vec<_>>();
+        assert!(!first.is_empty(), "fontconfig knows a monospace font");
+        let again = collection
+            .generic_families(GenericFamily::Monospace)
+            .collect::<Vec<_>>();
+        assert_eq!(first, again);
+
+        // A clone keeps what was found and finds the rest itself.
+        let mut clone = collection.clone();
+        assert_eq!(
+            clone.generic_families(GenericFamily::Monospace).collect::<Vec<_>>(),
+            first
+        );
+        assert!(clone.generic_families(GenericFamily::SansSerif).next().is_some());
+    }
 }
