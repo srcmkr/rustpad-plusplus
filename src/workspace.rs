@@ -150,6 +150,8 @@ pub struct Workspace {
     job: Option<Job>,
     /// Ctrl+wheel distance not yet turned into a zoom step, in lines.
     wheel_zoom: f32,
+    /// The last frame showed progress, so it needs one more once that is done.
+    shown_busy: bool,
     _ticker: Option<Task<()>>,
 }
 
@@ -180,6 +182,7 @@ impl Workspace {
             bar: None,
             message: None,
             job: None,
+            shown_busy: false,
             _ticker: None,
         };
         if ws.session_enabled(cx) {
@@ -202,7 +205,13 @@ impl Workspace {
         ws
     }
 
-    /// Repaint while the line index or a job is running, so progress shows.
+    /// Whether the line index or a job is running.
+    fn busy(&self, cx: &App) -> bool {
+        self.job.is_some() || self.tabs.get(self.active).is_some_and(|t| !t.buffer.read(cx).line_index().is_done())
+    }
+
+    /// Repaint while the line index or a job is running, so progress shows,
+    /// and once more after the last frame that showed it.
     fn start_ticker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self._ticker = Some(cx.spawn_in(window, async move |this, cx| {
             loop {
@@ -210,9 +219,8 @@ impl Workspace {
                 let Ok(busy) = this.update_in(cx, |ws, window, cx| {
                     ws.autosave(window, cx);
                     ws.check_disk(cx);
-                    let busy = ws.job.is_some()
-                        || ws.tabs.get(ws.active).is_some_and(|t| !t.buffer.read(cx).line_index().is_done());
-                    if busy {
+                    let busy = ws.busy(cx);
+                    if busy || ws.shown_busy {
                         cx.notify();
                         // Line numbers in the gutter appear once indexed.
                         if let Some(t) = ws.tabs.get(ws.active) {
@@ -1632,6 +1640,7 @@ impl Focusable for Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_title(window, cx);
+        self.shown_busy = self.busy(cx);
         let overflow = self.tab_scroll.max_offset().x > px(0.);
         if overflow != self.tabs_overflow {
             // The bar changed its width; bring the active tab back into view.
