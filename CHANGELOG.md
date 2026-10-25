@@ -2,7 +2,7 @@
 
 What changed in each version of rustpad++. The newest version is at the top.
 
-## Unreleased
+## 0.4.1 - 2026-10-25
 
 - rustpad++ starts about seven times as fast: the window shows its content
   after about 35 ms instead of 230 ms. The first frames are drawn on the CPU
