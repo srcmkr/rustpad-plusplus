@@ -36,7 +36,7 @@ make it executable and start it.
   written every second, so even a crash or power cut costs only the last
   moments. Saving writes a new file and swaps it in, so an interrupted save
   never leaves a half-written file behind.
-- **Fast, whatever the size.** The window shows its content about 35 ms after
+- **Fast, whatever the size.** The window shows its content less than 40 ms after
   you start rustpad++, faster than any other editor we measured: the first
   frames are drawn on the CPU while the graphics card gets ready, which then
   takes over unnoticed. A file opened from the file manager is a new tab
@@ -64,11 +64,10 @@ Starting with a small file (a 100 KB Rust source), median of 8 starts each:
 
 | Editor | Content on screen | Fully drawn |
 |---|---|---|
-| **rustpad++** | **34 ms** | **34 ms** |
-| Notepad Next 0.15 | 122 ms | 180 ms |
-| Sublime Text 4215 | 154 ms | 444 ms |
-| rustpad++ 0.4.0 | 228 ms | 228 ms |
-| Kate 23.08 | 231 ms | 552 ms |
+| **rustpad++** | **39 ms** | **39 ms** |
+| Notepad Next 0.15 | 102 ms | 180 ms |
+| Sublime Text 4215 | 176 ms | 444 ms |
+| Kate 23.08 | 241 ms | 552 ms |
 | GNOME Text Editor 46.3 | 351 ms | 576 ms |
 
 Opening a 1 GiB log file:
@@ -84,7 +83,9 @@ Opening a 1 GiB log file:
 Measured on one machine (Linux Mint 22.3, X11, Core Ultra 9 285K, RTX 4090),
 from starting the program until its window shows the content; the editors
 took turns, each with a profile that had been used before, and the file was
-already in the page cache. "Fully drawn" is the last visible change;
+already in the page cache. "Content on screen" comes from grabbing the
+window 240 times a second: the first grab whose text matches the final one.
+"Fully drawn" is the last visible change, ignoring the blinking cursor;
 "fully loaded" means the editor's CPU use has settled, for rustpad++ that is
 when all 11.5 million lines are counted. "Memory" is the program's own
 memory, without the file's pages that the system caches anyway.
