@@ -1683,8 +1683,6 @@ dependencies = [
 [[package]]
 name = "fontique"
 version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6688bc1294fe7117d788937b6c53480169b29c566954af490830d4c09da9516a"
 dependencies = [
  "hashbrown 0.17.1",
  "linebender_resource_handle",
@@ -1973,7 +1971,7 @@ dependencies = [
  "log",
  "presser",
  "thiserror 2.0.21",
- "windows 0.61.3",
+ "windows 0.62.2",
 ]
 
 [[package]]
@@ -1999,8 +1997,6 @@ dependencies = [
 [[package]]
 name = "gpui-ce"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7691a905fc9b283228c14b9b5ca93d002be88e203aa5878746152210b33c8dbf"
 dependencies = [
  "accesskit",
  "anyhow",
@@ -2160,8 +2156,6 @@ dependencies = [
 [[package]]
 name = "gpui_ce_linux"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e471c10455ec436ba6d9a41f2e08db60576283ccd1f51a844e4d72810a297e28"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -2299,8 +2293,6 @@ dependencies = [
 [[package]]
 name = "gpui_ce_parley"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2254b91da65d1e8823708275347e88a83141dbb9cb58d3ab0736168ea4d9673c"
 dependencies = [
  "anyhow",
  "fontique",
@@ -2433,8 +2425,6 @@ dependencies = [
 [[package]]
 name = "gpui_ce_wgpu"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3168d4877f63a3e4a36dce067dd3c19d6df5604be3ac0d357da2aedc9e44db0"
 dependencies = [
  "anyhow",
  "etagere",
@@ -2655,7 +2645,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.2",
+ "windows-core 0.62.2",
 ]
 
 [[package]]

@@ -1,7 +1,14 @@
 [workspace]
 resolver = "3"
 members = [".", "crates/*"]
-exclude = ["patches/xim-ctext"]
+exclude = [
+    "patches/xim-ctext",
+    "patches/fontique",
+    "patches/gpui-ce",
+    "patches/gpui_ce_linux",
+    "patches/gpui_ce_parley",
+    "patches/gpui_ce_wgpu",
+]
 
 [workspace.package]
 version = "0.4.0"
@@ -51,6 +58,12 @@ strip = true
 [profile.dev.package."*"]
 opt-level = 2
 
-# Fixed COMPOUND_TEXT decoding: umlauts typed through ibus/XIM crashed the app.
 [patch.crates-io]
+# Fixed COMPOUND_TEXT decoding: umlauts typed through ibus/XIM crashed the app.
 xim-ctext = { path = "patches/xim-ctext" }
+# Unchanged copies of GPUI and fontique, to be changed for a faster start.
+gpui-ce = { path = "patches/gpui-ce" }
+gpui_ce_linux = { path = "patches/gpui_ce_linux" }
+gpui_ce_parley = { path = "patches/gpui_ce_parley" }
+gpui_ce_wgpu = { path = "patches/gpui_ce_wgpu" }
+fontique = { path = "patches/fontique" }
