@@ -12,6 +12,8 @@
 
 https://github.com/user-attachments/assets/c1d910c6-b2f5-47fe-9efe-ff40c25fbe6d
 
+<sub>[Watch on YouTube](https://youtu.be/J26st6T2rUY)</sub>
+
 ### Install on Debian, Ubuntu or Linux Mint
 
 ```sh
