@@ -2,7 +2,7 @@
 
 What changed in each version of rustpad++. The newest version is at the top.
 
-## Unreleased
+## 0.4.0 - 2026-10-25
 
 - New color scheme Aurora (Settings → Appearance): graded dark surfaces,
   syntax colors in violet, indigo and teal, and an About dialog lit from
