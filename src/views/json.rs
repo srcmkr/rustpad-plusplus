@@ -12,11 +12,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{
     App, Context, Entity, EventEmitter, FocusHandle, Focusable, HighlightStyle, Hsla, IntoElement,
-    MouseButton, MouseDownEvent, Render, ScrollStrategy, SharedString, Stateful, StyledText, Task,
+    MouseButton, MouseDownEvent, MouseMoveEvent, Render, ScrollStrategy, SharedString, Stateful, StyledText, Task,
     UniformListScrollHandle, Window, div, prelude::*, px, uniform_list,
 };
 
 use super::JumpTo;
+use super::scrollbar::{self, Axis, Bar, Drag};
 use super::text::{DocEnd, DocStart, MoveDown, MoveLeft, MoveRight, MoveUp, Newline, PageDown, PageUp};
 use crate::doc::Buffer;
 use crate::theme::{self, Settings};
@@ -534,6 +535,9 @@ pub struct JsonView {
     selected: usize,
     root_error: Option<SharedString>,
     scroll: UniformListScrollHandle,
+    /// Scrollbar at the last render, and its thumb drag.
+    vbar: Option<Bar>,
+    drag: Option<Drag>,
     cancel: Arc<AtomicBool>,
     tasks: Vec<Task<()>>,
     /// Paths that were expanded before an edit, re-expanded when seen again.
@@ -565,12 +569,46 @@ impl JsonView {
             selected: 0,
             root_error: None,
             scroll: UniformListScrollHandle::new(),
+            vbar: None,
+            drag: None,
             cancel: Arc::new(AtomicBool::new(false)),
             tasks: Vec::new(),
             restore: HashSet::new(),
         };
         v.build_root(cx);
         v
+    }
+
+    fn current_vbar(&self) -> Option<Bar> {
+        scrollbar::uniform_vbar(&self.scroll).filter(|_| self.root_error.is_none())
+    }
+
+    /// Scrollbar press: on the thumb starts a drag, beside it scrolls a page.
+    fn on_vbar_down(&mut self, e: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        cx.stop_propagation();
+        window.focus(&self.focus, cx);
+        let Some(bar) = self.vbar else { return };
+        match bar.press(e.position, scrollbar::uniform_offset(&self.scroll, Axis::Vertical)) {
+            Ok(drag) => self.drag = Some(drag),
+            Err(to) => scrollbar::set_uniform_offset(&self.scroll, Axis::Vertical, to),
+        }
+        cx.notify();
+    }
+
+    fn on_mouse_move(&mut self, e: &MouseMoveEvent, cx: &mut Context<Self>) {
+        let (Some(drag), Some(bar)) = (self.drag, self.vbar) else { return };
+        if e.pressed_button != Some(MouseButton::Left) {
+            self.drag = None;
+        } else {
+            scrollbar::set_uniform_offset(&self.scroll, Axis::Vertical, bar.dragged(&drag, e.position));
+        }
+        cx.notify();
+    }
+
+    fn end_drag(&mut self, cx: &mut Context<Self>) {
+        if self.drag.take().is_some() {
+            cx.notify();
+        }
     }
 
     fn reset(&mut self, cx: &mut Context<Self>) {
@@ -1118,7 +1156,7 @@ fn group(n: u64) -> String {
 }
 
 impl Render for JsonView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let s = Settings::get(cx);
         let font = s.mono();
         let font_size = s.font_size;
@@ -1127,6 +1165,16 @@ impl Render for JsonView {
             _ => String::new(),
         };
         let page = 20;
+        self.vbar = self.current_vbar();
+        scrollbar::recheck(self.vbar, Self::current_vbar, window, cx);
+        if self.vbar.is_none() {
+            self.drag = None;
+        }
+        let vbar = self.vbar.map(|bar| {
+            bar.element(self.drag.is_some())
+                .id("json-vbar")
+                .on_mouse_down(MouseButton::Left, cx.listener(|v, e: &MouseDownEvent, w, cx| v.on_vbar_down(e, w, cx)))
+        });
         div()
             .id("json-view")
             .key_context("JsonView")
@@ -1137,6 +1185,9 @@ impl Render for JsonView {
             .bg(theme::bg())
             .font(font)
             .text_size(font_size)
+            .on_mouse_move(cx.listener(|v, e: &MouseMoveEvent, _, cx| v.on_mouse_move(e, cx)))
+            .on_mouse_up(MouseButton::Left, cx.listener(|v, _, _, cx| v.end_drag(cx)))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(|v, _, _, cx| v.end_drag(cx)))
             .on_action(cx.listener(|v, _: &MoveUp, _, cx| v.select(v.selected.saturating_sub(1), cx)))
             .on_action(cx.listener(|v, _: &MoveDown, _, cx| v.select(v.selected + 1, cx)))
             .on_action(cx.listener(move |v, _: &PageUp, _, cx| v.select(v.selected.saturating_sub(page), cx)))
@@ -1169,9 +1220,19 @@ impl Render for JsonView {
                     .text_color(theme::error())
                     .child(msg.clone())
                     .into_any_element(),
-                None => uniform_list("json-rows", self.rows.len(), cx.processor(|v, range, _, cx| v.render_rows(range, cx)))
-                    .track_scroll(&self.scroll)
+                None => div()
                     .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_row()
+                    .child(
+                        uniform_list("json-rows", self.rows.len(), cx.processor(|v, range, _, cx| v.render_rows(range, cx)))
+                            .track_scroll(&self.scroll)
+                            .flex_1()
+                            .min_w_0()
+                            .h_full(),
+                    )
+                    .children(vbar)
                     .into_any_element(),
             })
     }

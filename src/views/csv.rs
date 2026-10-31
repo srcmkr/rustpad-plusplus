@@ -19,6 +19,7 @@ use gpui::{
 };
 
 use super::JumpTo;
+use super::scrollbar::{self, Axis, Bar, Drag};
 use super::text::{DocEnd, DocStart, MoveDown, MoveUp, Newline, PageDown, PageUp};
 use crate::doc::Buffer;
 use crate::theme::{self, Settings};
@@ -175,6 +176,13 @@ pub struct CsvView {
     resizing: Option<(usize, Pixels, f32)>,
     /// Character width at the last render.
     char_w: Pixels,
+    /// Width of a row at the last render.
+    content_w: Pixels,
+    /// Scrollbars at the last render, where the rows don't fit.
+    hbar: Option<Bar>,
+    vbar: Option<Bar>,
+    /// Scrollbar thumb being dragged.
+    drag: Option<Drag>,
     parsed_version: Option<u64>,
     truncated: bool,
     parsing: bool,
@@ -203,6 +211,10 @@ impl CsvView {
             custom: HashMap::new(),
             resizing: None,
             char_w: px(8.),
+            content_w: px(0.),
+            hbar: None,
+            vbar: None,
+            drag: None,
             parsed_version: None,
             truncated: false,
             parsing: false,
@@ -324,7 +336,42 @@ impl CsvView {
         cx.notify();
     }
 
+    /// Both scrollbars as the latest layout gives them.
+    fn current_bars(&self) -> (Option<Bar>, Option<Bar>) {
+        if self.table.header.is_empty() {
+            return (None, None);
+        }
+        let state = self.scroll.0.borrow();
+        let base = &state.base_handle;
+        let h = state.last_item_size.and_then(|s| Bar::new(Axis::Horizontal, base.bounds().left(), s.item.width, self.content_w, -base.offset().x));
+        drop(state);
+        (h, scrollbar::uniform_vbar(&self.scroll))
+    }
+
+    /// Scrollbar press: on the thumb starts a drag, beside it scrolls a page that way.
+    fn on_bar_down(&mut self, axis: Axis, e: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        cx.stop_propagation();
+        window.focus(&self.focus, cx);
+        let bar = if axis == Axis::Horizontal { self.hbar } else { self.vbar };
+        let Some(bar) = bar else { return };
+        match bar.press(e.position, scrollbar::uniform_offset(&self.scroll, axis)) {
+            Ok(drag) => self.drag = Some(drag),
+            Err(to) => scrollbar::set_uniform_offset(&self.scroll, axis, to),
+        }
+        cx.notify();
+    }
+
     fn on_mouse_move(&mut self, e: &MouseMoveEvent, cx: &mut Context<Self>) {
+        if let Some(drag) = self.drag {
+            let bar = if drag.axis == Axis::Horizontal { self.hbar } else { self.vbar };
+            if e.pressed_button != Some(MouseButton::Left) {
+                self.drag = None;
+            } else if let Some(bar) = bar {
+                scrollbar::set_uniform_offset(&self.scroll, drag.axis, bar.dragged(&drag, e.position));
+            }
+            cx.notify();
+            return;
+        }
         let Some((c, x0, w0)) = self.resizing else { return };
         if e.pressed_button != Some(MouseButton::Left) {
             self.resizing = None;
@@ -335,7 +382,7 @@ impl CsvView {
     }
 
     fn end_resize(&mut self, cx: &mut Context<Self>) {
-        if self.resizing.take().is_some() {
+        if self.resizing.take().is_some() | self.drag.take().is_some() {
             cx.notify();
         }
     }
@@ -388,7 +435,34 @@ impl Render for CsvView {
         let cols: Rc<Vec<Pixels>> = Rc::new((0..table.widths.len()).map(|c| char_w * self.col_chars(c)).collect());
         let digits = table.rows.len().max(1).to_string().len();
         let num_w = char_w * (digits as f32 + 2.);
-        let scroll_x = self.scroll.0.borrow().base_handle.offset().x;
+        // The list clamps its scroll offset only when it lays out, after this render, and a
+        // wheel step past the right edge is stored unclamped. Clamp here, from the row width,
+        // so the header never runs past the rows below it.
+        let content_w = cols.iter().fold(num_w, |a, &w| a + w);
+        self.content_w = content_w;
+        let view_w = self.scroll.0.borrow().last_item_size.map(|s| s.item.width);
+        let max_x = view_w.map_or(px(0.), |w| (content_w - w).max(px(0.)));
+        let mut scroll_x = self.scroll.0.borrow().base_handle.offset().x;
+        if view_w.is_some() && (scroll_x < -max_x || scroll_x > px(0.)) {
+            scroll_x = scroll_x.clamp(-max_x, px(0.));
+            scrollbar::set_uniform_offset(&self.scroll, Axis::Horizontal, -scroll_x);
+        }
+        (self.hbar, self.vbar) = self.current_bars();
+        scrollbar::recheck((self.hbar, self.vbar), Self::current_bars, window, cx);
+        if self.drag.is_some_and(|d| if d.axis == Axis::Horizontal { self.hbar.is_none() } else { self.vbar.is_none() }) {
+            self.drag = None;
+        }
+        let dragging = |axis| self.drag.is_some_and(|d: Drag| d.axis == axis);
+        let hbar = self.hbar.map(|bar| {
+            bar.element(dragging(Axis::Horizontal))
+                .id("csv-hbar")
+                .on_mouse_down(MouseButton::Left, cx.listener(|v, e: &MouseDownEvent, w, cx| v.on_bar_down(Axis::Horizontal, e, w, cx)))
+        });
+        let vbar = self.vbar.map(|bar| {
+            bar.element(dragging(Axis::Vertical))
+                .id("csv-vbar")
+                .on_mouse_down(MouseButton::Left, cx.listener(|v, e: &MouseDownEvent, w, cx| v.on_bar_down(Axis::Vertical, e, w, cx)))
+        });
 
         let notice = if self.parsing {
             Some(tr!("Reading table…"))
@@ -488,12 +562,23 @@ impl Render for CsvView {
             .child(if table.header.is_empty() && !self.parsing {
                 div().flex_1().p_4().text_color(theme::text_dim()).child(tr!("Empty document")).into_any_element()
             } else {
-                uniform_list("csv-rows", self.order.len(), cx.processor(move |v, range, _, cx| v.render_rows(range, &cols, num_w, cx)))
-                    .with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::Unconstrained)
-                    .track_scroll(&self.scroll)
+                div()
                     .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_row()
+                    .child(
+                        uniform_list("csv-rows", self.order.len(), cx.processor(move |v, range, _, cx| v.render_rows(range, &cols, num_w, cx)))
+                            .with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::Unconstrained)
+                            .track_scroll(&self.scroll)
+                            .flex_1()
+                            .min_w_0()
+                            .h_full(),
+                    )
+                    .children(vbar)
                     .into_any_element()
             })
+            .children(hbar)
     }
 }
 

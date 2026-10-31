@@ -2,3 +2,6 @@ target/
 
 # Packages built by packaging/build-packages.sh
 /dist/
+
+# Drafts for announcements, kept local
+/docs/release/

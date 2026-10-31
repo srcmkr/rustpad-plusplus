@@ -11,12 +11,13 @@ use std::time::Duration;
 use gpui::{
     AnyElement, App, Context, Entity, EventEmitter, FocusHandle, Focusable, Font, FontFallbacks,
     FontStyle, FontWeight, Hsla, InteractiveText, IntoElement, ListAlignment, ListOffset, ListState,
-    MouseButton, Pixels, Render, StrikethroughStyle, StyledText, Task, TextRun, UnderlineStyle, WeakEntity,
+    MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Render, StrikethroughStyle, StyledText, Task, TextRun, UnderlineStyle, WeakEntity,
     Window, div, list, prelude::*, px,
 };
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 
 use super::JumpTo;
+use super::scrollbar::{self, Bar, Drag};
 use super::text::{DocEnd, DocStart, MoveDown, MoveUp, PageDown, PageUp};
 use crate::doc::Buffer;
 use crate::theme::{self, Settings};
@@ -31,6 +32,10 @@ const SYNC_LIMIT: usize = 1 << 20;
 const PIECE: usize = 8 << 10;
 const BODY_FAMILY: &str = "DejaVu Sans";
 const BODY_SIZE: f32 = 15.0;
+/// Up to this many blocks all are measured up front, so the scrollbar is
+/// exact from the start. Above, an unmeasured block counts as a few lines.
+const MEASURE_ALL: usize = 2000;
+const ESTIMATED_LINES: f32 = 3.0;
 const CONTENT_W: f32 = 860.0;
 
 // ---------------------------------------------------------------- model
@@ -545,6 +550,9 @@ pub struct MarkdownView {
     parsing: bool,
     /// Font size the list items were measured with; zooming remeasures them.
     font_size: Pixels,
+    /// Scrollbar at the last render, and its thumb drag.
+    vbar: Option<Bar>,
+    drag: Option<Drag>,
     _reparse: Option<Task<()>>,
 }
 
@@ -563,11 +571,13 @@ impl MarkdownView {
             buffer,
             focus: cx.focus_handle(),
             blocks: Rc::new(Vec::new()),
-            list: ListState::new(0, ListAlignment::Top, px(600.)),
+            list: new_list(0),
             parsed_version: None,
             truncated: false,
             parsing: false,
             font_size: Settings::get(cx).font_size,
+            vbar: None,
+            drag: None,
             _reparse: None,
         };
         v.reparse(cx);
@@ -618,7 +628,11 @@ impl MarkdownView {
         let top = self.list.logical_scroll_top();
         let n = blocks.len() + 1; // +1: notice / bottom padding row
         self.blocks = Rc::new(blocks);
-        self.list.reset(n);
+        let was_measured = self.list.item_count() <= MEASURE_ALL;
+        if (n <= MEASURE_ALL) != was_measured {
+            self.list = new_list(n);
+        }
+        self.reset_list(n);
         self.list.scroll_to(ListOffset { item_ix: top.item_ix.min(n - 1), offset_in_item: top.offset_in_item });
         cx.notify();
     }
@@ -627,13 +641,61 @@ impl MarkdownView {
     fn remeasure(&mut self, ratio: f32) {
         let top = self.list.logical_scroll_top();
         let n = self.list.item_count();
-        self.list.reset(n);
+        self.reset_list(n);
         self.list.scroll_to(ListOffset { item_ix: top.item_ix.min(n.saturating_sub(1)), offset_in_item: top.offset_in_item * ratio });
+    }
+
+    /// Replaces the rows with `n` unmeasured ones; see [`MEASURE_ALL`].
+    fn reset_list(&mut self, n: usize) {
+        if n <= MEASURE_ALL {
+            self.list.reset(n);
+        } else {
+            let z = f32::from(self.font_size) / theme::DEFAULT_FONT_SIZE;
+            self.list.reset_with_uniform_height(n, px(BODY_SIZE * 1.55 * z * ESTIMATED_LINES));
+        }
+    }
+
+    /// Scrollbar press: on the thumb starts a drag, beside it scrolls a page.
+    fn on_vbar_down(&mut self, e: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        cx.stop_propagation();
+        window.focus(&self.focus, cx);
+        let Some(bar) = self.vbar else { return };
+        match bar.press(e.position, scrollbar::list_offset(&self.list)) {
+            Ok(drag) => {
+                self.list.scrollbar_drag_started();
+                self.drag = Some(drag);
+            }
+            Err(to) => scrollbar::set_list_offset(&self.list, to),
+        }
+        cx.notify();
+    }
+
+    fn on_mouse_move(&mut self, e: &MouseMoveEvent, cx: &mut Context<Self>) {
+        let (Some(drag), Some(bar)) = (self.drag, self.vbar) else { return };
+        if e.pressed_button != Some(MouseButton::Left) {
+            self.end_drag(cx);
+        } else {
+            scrollbar::set_list_offset(&self.list, bar.dragged(&drag, e.position));
+            cx.notify();
+        }
+    }
+
+    fn end_drag(&mut self, cx: &mut Context<Self>) {
+        if self.drag.take().is_some() {
+            self.list.scrollbar_drag_ended();
+            cx.notify();
+        }
     }
 
     fn page(&self, window: &Window) -> gpui::Pixels {
         (window.viewport_size().height - px(120.)).max(px(100.))
     }
+}
+
+/// A list for `n` blocks: measured up front for small documents, see [`MEASURE_ALL`].
+fn new_list(n: usize) -> ListState {
+    let list = ListState::new(n, ListAlignment::Top, px(600.));
+    if n <= MEASURE_ALL { list.measure_all() } else { list }
 }
 
 fn body_font(bold: bool, italic: bool) -> Font {
@@ -826,7 +888,7 @@ fn render_block(ix: usize, block: &Block, mono: &Font, z: f32, view: WeakEntity<
 }
 
 impl Render for MarkdownView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let s = Settings::get(cx);
         let mono = s.mono();
         let z = f32::from(s.font_size) / theme::DEFAULT_FONT_SIZE;
@@ -847,6 +909,19 @@ impl Render for MarkdownView {
         } else {
             None
         };
+
+        // Hidden while the list is empty or not laid out yet; a drag keeps the
+        // bar from its start, see `ListState::scrollbar_drag_started`.
+        self.vbar = scrollbar::list_vbar(&self.list);
+        scrollbar::recheck(self.vbar, |v: &Self| scrollbar::list_vbar(&v.list), window, cx);
+        if self.vbar.is_none() {
+            self.end_drag(cx);
+        }
+        let vbar = self.vbar.map(|bar| {
+            bar.element(self.drag.is_some())
+                .id("markdown-vbar")
+                .on_mouse_down(MouseButton::Left, cx.listener(|v, e: &MouseDownEvent, w, cx| v.on_vbar_down(e, w, cx)))
+        });
 
         div()
             .id("markdown-view")
@@ -886,6 +961,9 @@ impl Render for MarkdownView {
                 cx.notify()
             }))
             .on_mouse_down(MouseButton::Left, cx.listener(|v, _, window, cx| window.focus(&v.focus, cx)))
+            .on_mouse_move(cx.listener(|v, e: &MouseMoveEvent, _, cx| v.on_mouse_move(e, cx)))
+            .on_mouse_up(MouseButton::Left, cx.listener(|v, _, _, cx| v.end_drag(cx)))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(|v, _, _, cx| v.end_drag(cx)))
             .children(notice.map(|n| {
                 div()
                     .px_4()
@@ -898,16 +976,25 @@ impl Render for MarkdownView {
                     .child(n)
             }))
             .child(
-                list(self.list.clone(), move |ix, _, _| {
-                    if ix >= count {
-                        // Bottom padding.
-                        return div().h(px(80.)).into_any_element();
-                    }
-                    render_block(ix, &blocks[ix], &mono, z, view.clone())
-                })
-                .flex_1()
-                .size_full()
-                .pt_4(),
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_row()
+                    .child(
+                        list(self.list.clone(), move |ix, _, _| {
+                            if ix >= count {
+                                // Bottom padding.
+                                return div().h(px(80.)).into_any_element();
+                            }
+                            render_block(ix, &blocks[ix], &mono, z, view.clone())
+                        })
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .pt_4(),
+                    )
+                    .children(vbar),
             )
     }
 }

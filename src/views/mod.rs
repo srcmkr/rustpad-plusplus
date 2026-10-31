@@ -2,6 +2,7 @@ pub mod csv;
 pub mod hex;
 pub mod json;
 pub mod markdown;
+pub mod scrollbar;
 pub mod text;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
