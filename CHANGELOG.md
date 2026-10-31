@@ -2,7 +2,7 @@
 
 What changed in each version of rustpad++. The newest version is at the top.
 
-## Unreleased
+## 0.4.2 - 2026-10-31
 
 - The table view keeps the column headers above their columns when
   scrolling to the right edge.
