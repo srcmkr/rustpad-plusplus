@@ -9,6 +9,9 @@ What changed in each version of rustpad++. The newest version is at the top.
 - The table view has horizontal and vertical scrollbars, the JSON tree and
   the Markdown view a vertical one. Drag the thumb, or click beside it to
   move one page.
+- The Markdown parser is updated to fix a security issue
+  (RUSTSEC-2026-0414). rustpad++ was not affected, as it does not use the
+  affected wiki link option.
 
 ## 0.4.1 - 2026-10-25
 
