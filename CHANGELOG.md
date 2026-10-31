@@ -2,6 +2,14 @@
 
 What changed in each version of rustpad++. The newest version is at the top.
 
+## Unreleased
+
+- The table view keeps the column headers above their columns when
+  scrolling to the right edge.
+- The table view has horizontal and vertical scrollbars, the JSON tree and
+  the Markdown view a vertical one. Drag the thumb, or click beside it to
+  move one page.
+
 ## 0.4.1 - 2026-10-25
 
 - rustpad++ starts about seven times as fast: the window shows its content
